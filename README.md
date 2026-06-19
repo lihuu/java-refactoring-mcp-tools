@@ -33,3 +33,25 @@ After installing or running in sandbox, open **Settings → Tools → AI Refacto
 - Only local variables and fields under the caret are supported.
 - API key is stored in the plugin's settings file (not the OS keychain). Do not commit it.
 - One LLM endpoint shape (OpenAI-compatible chat/completions).
+
+## Manual sandbox verification (MVP acceptance)
+
+Run `./gradlew runIde` and execute each scenario. Record pass/fail. (Requires Gradle 8.7 + JDK 17; the Gradle wrapper must be generated first — see Development.)
+
+- [ ] Java local variable rename — caret on a local var declaration, AI returns rename, native preview/dialog appears (if Enable Preview is on), variable + usages update.
+- [ ] Java field rename — same flow on a private/public field.
+- [ ] AI returns no_action — notification reads "No refactoring suggested.", source unchanged.
+- [ ] AI returns invalid JSON — notification reads "AI response is invalid.", no rename invoked.
+- [ ] Non-Java file (e.g. notes.txt) — notification reads "AI Refactoring MVP only supports Java files.", LLM not called.
+- [ ] Missing API key — notification reads "AI Refactoring is not configured. Set base URL, API key, and model in Settings.", LLM not called.
+
+Each scenario must leave the IDE stable. AI must not edit source outside the rename refactoring path.
+
+## Known limitations (MVP / to address in MVP+)
+
+These are deliberate trade-offs in the MVP, surfaced during code review:
+
+- **The LLM call runs on the UI thread.** `actionPerformed` invokes the network call synchronously, so the IDE UI is blocked while waiting for the LLM (up to the 60-second request timeout). A production version should run the LLM call on a background thread (e.g. `Task.Backgroundable`) and marshal the result back to the EDT for the rename. This does not affect correctness, only responsiveness.
+- **Caret must be on the symbol's declaration, not a usage.** The resolver maps the caret's identifier to its declaration only when the caret sits on the declaration. A caret on a *reference* (a use site) currently resolves to the enclosing method/class and is reported as unsupported. A production version should resolve references to their target declaration.
+- **No top-level error guard.** If an unexpected exception occurs after symbol resolution (e.g. during context collection or validation), it is logged by the IDE but not surfaced as a user notification. A production version should wrap the pipeline in a catch that shows a generic failure balloon.
+- **API key is stored in plain settings XML**, not the OS keychain (see MVP limitations above).
