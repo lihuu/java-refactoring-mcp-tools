@@ -15,4 +15,14 @@
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="AI Refactoring" displayType="BALLOON"/>
     </extensions>
+
+    <actions>
+        <action id="com.example.airefactoring.AiRenameSymbol"
+                class="com.example.airefactoring.action.AiRenameSymbolAction"
+                text="AI Rename Symbol"
+                description="Ask AI whether to rename the symbol under the caret">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
