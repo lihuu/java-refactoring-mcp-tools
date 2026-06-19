@@ -14,6 +14,12 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="AI Refactoring" displayType="BALLOON"/>
+        <applicationService serviceImplementation="com.example.airefactoring.settings.AiRefactoringSettings"/>
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.example.airefactoring.settings.AiRefactoringConfigurable"
+                id="com.example.airefactoring.settings"
+                displayName="AI Refactoring"/>
     </extensions>
 
     <actions>
