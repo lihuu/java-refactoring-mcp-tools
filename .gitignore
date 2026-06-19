@@ -1,0 +1,14 @@
+# Build
+.gradle/
+build/
+out/
+
+# IntelliJ project files
+.idea/
+*.iml
+
+# Sandbox
+.intellijPlatform/
+
+# Local config
+local.properties

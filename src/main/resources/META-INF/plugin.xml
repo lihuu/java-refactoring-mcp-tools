@@ -1,0 +1,18 @@
+<idea-plugin>
+    <id>com.example.airefactoring</id>
+    <name>AI Refactoring MVP</name>
+    <vendor email="dev@example.com" url="https://example.com">example</vendor>
+
+    <description><![CDATA[
+        Asks an LLM whether the Java symbol under the caret should be renamed,
+        and delegates the rename to IntelliJ's native refactoring engine.
+        AI never edits source directly.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="AI Refactoring" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
