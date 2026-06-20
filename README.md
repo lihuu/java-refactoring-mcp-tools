@@ -1,6 +1,6 @@
 # AI Refactoring MVP
 
-IntelliJ IDEA plugin that uses an LLM to suggest Java refactorings, then performs them via IntelliJ's native refactoring API. The AI never edits source directly. Refactorings are pluggable behind a single `RefactoringHandler` extension point (see [Architecture](#architecture)); the one shipped today renames a Java local variable or field.
+IntelliJ IDEA plugin that uses an LLM to suggest Java refactorings, then performs them via IntelliJ's native refactoring API. The AI never edits source directly. Refactorings are pluggable behind a single `RefactoringHandler` extension point (see [Architecture](#architecture)); the ones shipped today rename a Java local variable or field, and extract a selected block into a new method.
 
 ## Requirements
 
@@ -35,8 +35,15 @@ action/AiRenameSymbolAction        generic orchestrator (Java guard → resolve 
         ├─ refactoring/RefactoringRegistry      ordered handlers; first whose resolve() matches wins
         ├─ refactoring/RefactoringHandler        the extension point (one impl = one refactoring)
         ├─ refactoring/PromptEnvelope            shared, refactoring-agnostic prompt preamble
-        └─ refactoring/rename/RenameSymbolHandler   the only handler today; renames a local var/field
+        ├─ refactoring/rename/RenameSymbolHandler          renames a local var/field (caret on a declaration)
+        └─ refactoring/extractmethod/ExtractMethodHandler  extracts a selection into a new method
 ```
+
+`ExtractMethodHandler` is the realized second handler, proving the abstraction works for a
+non-symbol refactoring (its target is a selection, not a `PsiNamedElement`). Resolve ordering:
+**rename is tried first** (it claims the caret when it sits on a renameable symbol declaration);
+**extract resolves when there is a selection** (or a statement at the caret) and rename did not
+claim it.
 
 A `RefactoringHandler` owns its whole vertical slice:
 
@@ -82,7 +89,7 @@ After installing or running in sandbox, open **Settings → Tools → AI Refacto
 ## MVP limitations
 
 - Java files only.
-- Only local variables and fields under the caret are supported.
+- Symbol-based: local variables and fields under the caret can be renamed. A selection (or the statement at the caret) can be extracted into a new method.
 - API key is stored in the plugin's settings file (not the OS keychain). Do not commit it.
 - One LLM endpoint shape (OpenAI-compatible chat/completions via the official OpenAI Java SDK).
 

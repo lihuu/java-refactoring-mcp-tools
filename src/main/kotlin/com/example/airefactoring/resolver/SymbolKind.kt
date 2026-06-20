@@ -1,3 +1,3 @@
 package com.example.airefactoring.resolver
 
-enum class SymbolKind { LOCAL_VARIABLE, FIELD }
+enum class SymbolKind { LOCAL_VARIABLE, FIELD, METHOD }

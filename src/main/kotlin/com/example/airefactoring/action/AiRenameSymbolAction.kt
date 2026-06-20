@@ -10,6 +10,9 @@ import com.example.airefactoring.refactoring.PromptEnvelope
 import com.example.airefactoring.refactoring.RefactorOperation
 import com.example.airefactoring.refactoring.RefactorParseException
 import com.example.airefactoring.refactoring.RefactoringRegistry
+import com.example.airefactoring.refactoring.extractmethod.ExtractMethodExecutor
+import com.example.airefactoring.refactoring.extractmethod.ExtractMethodHandler
+import com.example.airefactoring.refactoring.extractmethod.IntellijExtractMethodExecutor
 import com.example.airefactoring.refactoring.rename.RenameSymbolHandler
 import com.example.airefactoring.refactoring.stringField
 import com.example.airefactoring.settings.AiRefactoringSettings
@@ -35,8 +38,9 @@ import kotlinx.serialization.json.JsonObject
 class AiRenameSymbolAction(
     private val llmFactory: () -> LlmClient = ::OpenAiCompatibleLlmClient,
     private val executorFactory: () -> RenameExecutor = ::IntellijRenameExecutor,
+    private val extractExecutorFactory: () -> ExtractMethodExecutor = ::IntellijExtractMethodExecutor,
     private val registry: RefactoringRegistry =
-        RefactoringRegistry(listOf(RenameSymbolHandler(executorFactory))),
+        RefactoringRegistry(listOf(RenameSymbolHandler(executorFactory), ExtractMethodHandler(extractExecutorFactory))),
 ) : AnAction() {
 
     private val json = Json { ignoreUnknownKeys = true }
