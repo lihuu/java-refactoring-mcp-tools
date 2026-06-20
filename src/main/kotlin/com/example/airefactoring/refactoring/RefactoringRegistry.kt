@@ -1,5 +1,6 @@
 package com.example.airefactoring.refactoring
 
+import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiFile
 
 /**
@@ -17,9 +18,9 @@ class RefactoringRegistry(private val handlers: List<RefactoringHandler>) {
      * Return the first handler whose [RefactoringHandler.resolve] matches at [caretOffset],
      * paired with the target it produced; or null if none apply.
      */
-    fun resolve(file: PsiFile, caretOffset: Int): Pair<RefactoringHandler, RefactorTarget>? {
+    fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): Pair<RefactoringHandler, RefactorTarget>? {
         for (handler in handlers) {
-            val target = handler.resolve(file, caretOffset)
+            val target = handler.resolve(file, editor, caretOffset)
             if (target != null) return handler to target
         }
         return null

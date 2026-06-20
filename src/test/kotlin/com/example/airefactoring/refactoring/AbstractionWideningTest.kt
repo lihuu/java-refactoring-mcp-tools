@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring
 
 import com.example.airefactoring.settings.AiRefactoringSettings
 import com.example.airefactoring.validator.ValidationResult
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiCodeBlock
 import com.intellij.psi.PsiElement
@@ -28,7 +29,7 @@ class AbstractionWideningTest : LightJavaCodeInsightFixtureTestCase() {
         override val id = "extract_method"
         override val displayName = "code selection"
 
-        override fun resolve(file: PsiFile, caretOffset: Int): RefactorTarget? =
+        override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? =
             RefactorTarget(
                 element = element,
                 context = FakeContext("x + y"),
@@ -62,7 +63,7 @@ class AbstractionWideningTest : LightJavaCodeInsightFixtureTestCase() {
         val handler = NonSymbolHandler(element)
         val registry = RefactoringRegistry(listOf(handler))
 
-        val resolved = registry.resolve(myFixture.file, 0)
+        val resolved = registry.resolve(myFixture.file, myFixture.editor, 0)
         assertNotNull(resolved)
         assertSame(handler, resolved!!.first)
         assertSame(element, resolved.second.element)
@@ -72,7 +73,7 @@ class AbstractionWideningTest : LightJavaCodeInsightFixtureTestCase() {
     fun testEnvelopeUsesHandlerQuestionAndHandlerContextForNonSymbol() {
         val element = codeBlockElement()
         val handler = NonSymbolHandler(element)
-        val target = handler.resolve(myFixture.file, 0)!!
+        val target = handler.resolve(myFixture.file, myFixture.editor, 0)!!
 
         val (system, user) = PromptEnvelope.assemble(handler.promptContribution(target), target)
 

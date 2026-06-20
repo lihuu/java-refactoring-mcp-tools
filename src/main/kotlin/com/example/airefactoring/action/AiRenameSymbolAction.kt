@@ -64,7 +64,7 @@ class AiRenameSymbolAction(
             return Notifier.error(project, "AI Refactoring MVP only supports Java files.")
         }
 
-        val (handler, target) = registry.resolve(file, editor.caretModel.offset)
+        val (handler, target) = registry.resolve(file, editor, editor.caretModel.offset)
             ?: return Notifier.error(project, "No supported refactoring for the symbol under the caret.")
 
         val settings = AiRefactoringSettings.getInstance().state

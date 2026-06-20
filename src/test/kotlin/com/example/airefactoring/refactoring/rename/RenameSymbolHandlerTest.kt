@@ -38,7 +38,7 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testResolveLocalVariable() {
         myFixture.configureByFile("LocalVar.java")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)
         assertNotNull(target)
         target!!
         assertEquals("userCount", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
@@ -47,7 +47,7 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testResolveField() {
         myFixture.configureByFile("Field.java")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)
         assertNotNull(target)
         target!!
         assertEquals("userName", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
@@ -56,13 +56,13 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testResolveOnWhitespaceReturnsNull() {
         myFixture.configureByFile("NoSymbol.java")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)
         assertNull(target)
     }
 
     fun testResolveNonJavaFileReturnsNull() {
         myFixture.configureByText("notes.txt", "hello <caret>world")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)
         assertNull(target)
     }
 
@@ -116,7 +116,7 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
 
     private fun localVarTarget(): RefactorTarget {
         myFixture.configureByFile("LocalVar.java")
-        return handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)!!
+        return handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)!!
     }
 
     fun testValidateRejectsKeyword() {
@@ -135,7 +135,7 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testExecuteCallsExecutorWithNewName() {
         myFixture.configureByFile("LocalVar.java")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)!!
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)!!
         val spy = SpyExecutor(IntellijRenameExecutor())
         val handlerWithSpy = RenameSymbolHandler(executorFactory = { spy })
         val summary = handlerWithSpy.execute(

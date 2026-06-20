@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring
 
 import com.example.airefactoring.settings.AiRefactoringSettings
 import com.example.airefactoring.validator.ValidationResult
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import kotlinx.serialization.json.JsonObject
@@ -22,9 +23,10 @@ interface RefactoringHandler {
 
     /**
      * Decide whether this handler applies at [caretOffset] in [file], and if so build the target.
-     * Return null to mean "I don't apply here" (the orchestrator tries the next handler).
+     * The [editor] is provided so a handler can read a selection (e.g. extract method); rename
+     * ignores it. Return null to mean "I don't apply here" (the orchestrator tries the next handler).
      */
-    fun resolve(file: PsiFile, caretOffset: Int): RefactorTarget?
+    fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget?
 
     /** This handler's prompt fragment + JSON shape, specialized for [target] if needed. */
     fun promptContribution(target: RefactorTarget): PromptContribution

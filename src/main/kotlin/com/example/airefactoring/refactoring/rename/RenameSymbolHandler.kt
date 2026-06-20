@@ -15,6 +15,7 @@ import com.example.airefactoring.resolver.SymbolResolver
 import com.example.airefactoring.settings.AiRefactoringSettings
 import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiNamedElement
@@ -35,7 +36,8 @@ class RenameSymbolHandler(
     override val id = "rename_symbol"
     override val displayName = "symbol"
 
-    override fun resolve(file: PsiFile, caretOffset: Int): RefactorTarget? {
+    override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? {
+        // Rename ignores the editor: it targets the symbol under the caret, no selection needed.
         val resolved = resolver.resolve(file, caretOffset)
         return when (resolved) {
             is ResolvedSymbol.Resolved -> RefactorTarget(

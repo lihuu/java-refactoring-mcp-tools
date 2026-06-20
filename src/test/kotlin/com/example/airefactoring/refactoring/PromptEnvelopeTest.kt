@@ -15,7 +15,7 @@ class PromptEnvelopeTest : LightJavaCodeInsightFixtureTestCase() {
 
     private fun assemble(): Pair<String, String> {
         myFixture.configureByFile("LocalVar.java")
-        val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)!!
+        val target = handler.resolve(myFixture.file, myFixture.editor, myFixture.editor.caretModel.offset)!!
         return PromptEnvelope.assemble(handler.promptContribution(target), target)
     }
 
