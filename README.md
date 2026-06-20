@@ -25,8 +25,10 @@ This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.in
 
 ## Configuration
 
+The plugin talks to the LLM through the official **OpenAI Java SDK** (`com.openai:openai-java:4.41.0`), pointed at any OpenAI-compatible endpoint via a custom `baseUrl`.
+
 After installing or running in sandbox, open **Settings → Tools → AI Refactoring** and set:
-- API Base URL (e.g. `https://api.openai.com`)
+- API Base URL — the API root (e.g. `https://api.openai.com`). The `/v1` version segment is appended automatically.
 - API Key
 - Model (e.g. `gpt-4o-mini`)
 - Enable Preview (toggle the rename preview dialog)
@@ -36,7 +38,7 @@ After installing or running in sandbox, open **Settings → Tools → AI Refacto
 - Java files only.
 - Only local variables and fields under the caret are supported.
 - API key is stored in the plugin's settings file (not the OS keychain). Do not commit it.
-- One LLM endpoint shape (OpenAI-compatible chat/completions).
+- One LLM endpoint shape (OpenAI-compatible chat/completions via the official OpenAI Java SDK).
 
 ## Manual sandbox verification (MVP acceptance)
 
