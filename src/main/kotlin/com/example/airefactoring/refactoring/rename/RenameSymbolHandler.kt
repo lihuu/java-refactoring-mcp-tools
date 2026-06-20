@@ -80,7 +80,8 @@ class RenameSymbolHandler(
         project: Project,
         settings: AiRefactoringSettings.State,
     ) {
-        val op = operation as RenameOperation
+        val op = operation as? RenameOperation
+            ?: error("execute called with non-RenameOperation: ${operation::class.simpleName}")
         executorFactory().rename(project, target.element, op.newName, settings.enablePreview)
     }
 
