@@ -66,8 +66,8 @@ abstract class AbstractAiRefactorAction(
         val file = e.getData(CommonDataKeys.PSI_FILE) ?: return
         val caretOffset = editor.caretModel.offset // read on EDT
 
-        // prepare needs PSI reads → read action; we're on the EDT here.
-        val prepared = ReadAction.compute<Prepared?, RuntimeException> {
+        // prepare needs PSI reads → read action; we're on the EDT here, so this runs inline.
+        val prepared = ReadAction.computeBlocking<Prepared?, RuntimeException> {
             prepare(project, editor, file, caretOffset)
         } ?: return // prepare already notified
 
