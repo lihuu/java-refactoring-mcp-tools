@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.rename
 
 import com.example.airefactoring.context.ContextCollector
+import com.example.airefactoring.context.RefactorContext
 import com.example.airefactoring.refactor.IntellijRenameExecutor
 import com.example.airefactoring.refactor.RenameExecutor
 import com.example.airefactoring.refactoring.PromptContribution
@@ -16,6 +17,7 @@ import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiNamedElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -48,11 +50,14 @@ class RenameSymbolHandler(
         }
     }
 
-    override fun promptContribution(target: RefactorTarget): PromptContribution =
-        PromptContribution(
+    override fun promptContribution(target: RefactorTarget): PromptContribution {
+        val symbolName = (target.context as RefactorContext).symbolName
+        return PromptContribution(
             systemFragment = NAMING_RULES,
             jsonShapeExample = JSON_SHAPE_EXAMPLE,
+            question = "Should the symbol \"$symbolName\" be renamed?",
         )
+    }
 
     override fun parse(actionJson: JsonObject): RefactorOperation {
         val action = actionJson.stringField("action")
@@ -68,8 +73,11 @@ class RenameSymbolHandler(
     override fun validate(operation: RefactorOperation, target: RefactorTarget, project: Project): ValidationResult {
         val op = operation as? RenameOperation
             ?: return ValidationResult.Invalid("Unsupported operation for rename_symbol.")
-        val currentName = target.element.name ?: ""
-        return validator.validate(op.newName, target.context.symbolKind, currentName, project)
+        val named = target.element as? PsiNamedElement
+            ?: error("rename_symbol requires a named element, got ${target.element::class.simpleName}")
+        val currentName = named.name ?: ""
+        val kind = (target.context as RefactorContext).symbolKind
+        return validator.validate(op.newName, kind, currentName, project)
     }
 
     override fun execute(
@@ -80,9 +88,11 @@ class RenameSymbolHandler(
     ): String {
         val op = operation as? RenameOperation
             ?: error("execute called with non-RenameOperation: ${operation::class.simpleName}")
+        val named = target.element as? PsiNamedElement
+            ?: error("rename_symbol requires a named element, got ${target.element::class.simpleName}")
         // Capture the current name BEFORE the rename, since the element's name changes after.
-        val currentName = target.element.name ?: ""
-        executorFactory().rename(project, target.element, op.newName, settings.enablePreview)
+        val currentName = named.name ?: ""
+        executorFactory().rename(project, named, op.newName, settings.enablePreview)
         return "Renamed '$currentName' to '${op.newName}'."
     }
 

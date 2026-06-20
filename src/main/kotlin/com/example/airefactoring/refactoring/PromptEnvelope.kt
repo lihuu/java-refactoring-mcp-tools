@@ -1,15 +1,11 @@
 package com.example.airefactoring.refactoring
 
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-
 /**
  * Shared, refactoring-agnostic prompt assembly. Holds the refactoring-agnostic preamble (you must
  * not edit code / return only JSON / no prose / no code fences) and assembles the final
  * (system, user) prompt pair from a chosen handler's [PromptContribution] plus the target context.
  */
 object PromptEnvelope {
-    private val json = Json { prettyPrint = true; encodeDefaults = false }
     const val NO_ACTION_SHAPE = """{"action":"no_action","reason":"<short explanation>"}"""
 
     /** Build the (system, user) prompt pair from the chosen handler's contribution and the target. */
@@ -27,10 +23,10 @@ object PromptEnvelope {
         }
         val user = buildString {
             appendLine("Context (JSON):")
-            appendLine(json.encodeToString(target.context))
+            appendLine(target.context.toPromptJson())
             appendLine()
             appendLine("Question:")
-            appendLine("Should the ${target.displayName} \"${target.context.symbolName}\" be refactored?")
+            appendLine(contribution.question)
             appendLine("Reply with one of the JSON shapes from the system message. No prose, no code fences.")
         }
         return system to user

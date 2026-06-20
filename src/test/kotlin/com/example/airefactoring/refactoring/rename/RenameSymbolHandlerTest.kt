@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring.rename
 
 import com.example.airefactoring.refactor.IntellijRenameExecutor
 import com.example.airefactoring.refactor.RenameExecutor
+import com.example.airefactoring.context.RefactorContext
 import com.example.airefactoring.refactoring.RefactorParseException
 import com.example.airefactoring.refactoring.RefactorTarget
 import com.example.airefactoring.resolver.SymbolKind
@@ -41,8 +42,8 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         assertNotNull(target)
         target!!
         assertEquals("rename_symbol", target.handlerId)
-        assertEquals("userCount", target.element.name)
-        assertEquals(SymbolKind.LOCAL_VARIABLE, target.context.symbolKind)
+        assertEquals("userCount", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
+        assertEquals(SymbolKind.LOCAL_VARIABLE, (target.context as RefactorContext).symbolKind)
     }
 
     fun testResolveField() {
@@ -51,8 +52,8 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         assertNotNull(target)
         target!!
         assertEquals("rename_symbol", target.handlerId)
-        assertEquals("userName", target.element.name)
-        assertEquals(SymbolKind.FIELD, target.context.symbolKind)
+        assertEquals("userName", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
+        assertEquals(SymbolKind.FIELD, (target.context as RefactorContext).symbolKind)
     }
 
     fun testResolveOnWhitespaceReturnsNull() {
