@@ -74,6 +74,39 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals(0, executor.calls)
     }
 
+    fun testUnknownActionDoesNotCallExecutor() {
+        configureValidSettings()
+        myFixture.configureByFile("EndToEnd.java")
+        val llm = FakeLlm("""{"action":"explode_universe","newName":"counter"}""")
+        val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
+        val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
+        action.runForTest(project, myFixture.editor, myFixture.file)
+        assertEquals(1, llm.calls)
+        assertEquals(0, executor.calls)
+    }
+
+    fun testNonStringActionDoesNotCallExecutor() {
+        configureValidSettings()
+        myFixture.configureByFile("EndToEnd.java")
+        val llm = FakeLlm("""{"action":[1,2],"newName":"counter"}""")
+        val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
+        val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
+        action.runForTest(project, myFixture.editor, myFixture.file)
+        assertEquals(1, llm.calls)
+        assertEquals(0, executor.calls)
+    }
+
+    fun testNonObjectJsonDoesNotCallExecutor() {
+        configureValidSettings()
+        myFixture.configureByFile("EndToEnd.java")
+        val llm = FakeLlm("""[{"action":"no_action"}]""")
+        val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
+        val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
+        action.runForTest(project, myFixture.editor, myFixture.file)
+        assertEquals(1, llm.calls)
+        assertEquals(0, executor.calls)
+    }
+
     fun testNonJavaFileSkipsLlmAndExecutor() {
         configureValidSettings()
         myFixture.configureByText("notes.txt", "hello <caret>world")
