@@ -21,6 +21,9 @@ interface RefactoringHandler {
     /** Human-readable label for notifications, e.g. "Rename symbol". */
     val displayName: String
 
+    /** Shown when resolve() returns null — tells the user how to position the caret/selection for this refactoring. */
+    val notApplicableMessage: String
+
     /**
      * Decide whether this handler applies at [caretOffset] in [file], and if so build the target.
      * The [editor] is provided so a handler can read a selection (e.g. extract method); rename

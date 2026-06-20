@@ -25,6 +25,7 @@ class RefactoringRegistryTest : LightJavaCodeInsightFixtureTestCase() {
         private val element: PsiNamedElement,
     ) : RefactoringHandler {
         override val displayName: String = "Fake $id"
+        override val notApplicableMessage: String = "Fake $id not applicable."
 
         override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? {
             if (caretOffset != matchOffset) return null

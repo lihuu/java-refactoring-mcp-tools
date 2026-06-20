@@ -1,6 +1,6 @@
 package com.example.airefactoring.refactoring.extractmethod
 
-import com.example.airefactoring.action.AiRenameSymbolAction
+import com.example.airefactoring.action.AiExtractMethodAction
 import com.example.airefactoring.llm.LlmClient
 import com.example.airefactoring.settings.AiRefactoringSettings
 import com.intellij.openapi.project.Project
@@ -9,8 +9,8 @@ import com.intellij.psi.PsiFile
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
 
 /**
- * Action-level test proving the generic orchestrator routes to the extract-method handler via a
- * selection (rename is registry-first but does not resolve a renameable declaration here).
+ * Action-level test proving [AiExtractMethodAction] drives the extract-method handler from a
+ * selection through the shared pipeline.
  */
 class ExtractMethodEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
 
@@ -48,12 +48,11 @@ class ExtractMethodEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         )
     }
 
-    // Selection is a print statement (not a var declaration), so the rename handler does not
-    // resolve a renameable symbol and the extract handler wins resolve.
+    // Select an extractable statement; the extract handler resolves it directly.
     private fun configureSelection() {
         myFixture.configureByText(
             "Calc.java",
-            "public class Calc { void run(int x,int y){ <selection>System.out.println(x + y);</selection> } }",
+            "public class Calc { int run(int x,int y){ <selection>int sum = x + y;</selection> return sum; } }",
         )
     }
 
@@ -62,8 +61,8 @@ class ExtractMethodEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         configureSelection()
         val llm = FakeLlm("""{"action":"extract_method","methodName":"computeSum"}""")
         val spy = SpyExtractExecutor()
-        val action = AiRenameSymbolAction(llmFactory = { llm }, extractExecutorFactory = { spy })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        val action = AiExtractMethodAction(llmFactory = { llm }, extractExecutorFactory = { spy })
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(1, spy.calls)
         assertEquals("computeSum", spy.lastMethodName)
@@ -74,8 +73,8 @@ class ExtractMethodEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         configureSelection()
         val llm = FakeLlm("""{"action":"no_action"}""")
         val spy = SpyExtractExecutor()
-        val action = AiRenameSymbolAction(llmFactory = { llm }, extractExecutorFactory = { spy })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        val action = AiExtractMethodAction(llmFactory = { llm }, extractExecutorFactory = { spy })
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, spy.calls)
     }
@@ -85,8 +84,8 @@ class ExtractMethodEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         configureSelection()
         val llm = FakeLlm("""{"action":"extract_method","methodName":"class"}""")
         val spy = SpyExtractExecutor()
-        val action = AiRenameSymbolAction(llmFactory = { llm }, extractExecutorFactory = { spy })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        val action = AiExtractMethodAction(llmFactory = { llm }, extractExecutorFactory = { spy })
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, spy.calls)
     }

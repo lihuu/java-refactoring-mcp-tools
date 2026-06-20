@@ -28,6 +28,7 @@ class AbstractionWideningTest : LightJavaCodeInsightFixtureTestCase() {
     private class NonSymbolHandler(private val element: PsiElement) : RefactoringHandler {
         override val id = "extract_method"
         override val displayName = "code selection"
+        override val notApplicableMessage = "Select code to extract."
 
         override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? =
             RefactorTarget(

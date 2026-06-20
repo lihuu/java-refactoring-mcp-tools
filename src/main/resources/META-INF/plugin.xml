@@ -30,5 +30,12 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="CodeMenu" anchor="last"/>
         </action>
+        <action id="com.example.airefactoring.AiExtractMethod"
+                class="com.example.airefactoring.action.AiExtractMethodAction"
+                text="AI Extract Method"
+                description="Ask AI to extract the selected code into a method">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

@@ -9,4 +9,10 @@ class AiRenameSymbolActionRegistrationTest : BasePlatformTestCase() {
         assertNotNull("AiRenameSymbol action should be registered in plugin.xml", action)
         assertTrue(action is AiRenameSymbolAction)
     }
+
+    fun testExtractMethodActionIsRegistered() {
+        val action = ActionManager.getInstance().getAction("com.example.airefactoring.AiExtractMethod")
+        assertNotNull("AiExtractMethod action should be registered in plugin.xml", action)
+        assertTrue(action is AiExtractMethodAction)
+    }
 }

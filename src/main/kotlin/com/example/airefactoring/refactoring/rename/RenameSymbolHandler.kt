@@ -35,6 +35,7 @@ class RenameSymbolHandler(
 
     override val id = "rename_symbol"
     override val displayName = "symbol"
+    override val notApplicableMessage = "Place the caret on a local variable or field to rename."
 
     override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? {
         // Rename ignores the editor: it targets the symbol under the caret, no selection needed.

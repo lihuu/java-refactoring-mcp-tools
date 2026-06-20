@@ -45,7 +45,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""{"action":"rename_symbol","newName":"counter"}""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         myFixture.checkResultByFile("EndToEnd_after.java")
         assertEquals(1, llm.calls)
         assertEquals(1, executor.calls)
@@ -58,7 +58,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""{"action":"no_action","reason":"already clear"}""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -69,7 +69,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("not json at all")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -80,7 +80,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""{"action":"explode_universe","newName":"counter"}""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -91,7 +91,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""{"action":[1,2],"newName":"counter"}""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -102,7 +102,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""[{"action":"no_action"}]""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -113,7 +113,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("ignored")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(0, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -126,7 +126,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("ignored")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(0, llm.calls)
         assertEquals(0, executor.calls)
     }
@@ -137,7 +137,7 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         val llm = FakeLlm("""{"action":"rename_symbol","newName":"class"}""")
         val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
         val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
-        action.runForTest(project, myFixture.editor, myFixture.file)
+        action.run(project, myFixture.editor, myFixture.file)
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }

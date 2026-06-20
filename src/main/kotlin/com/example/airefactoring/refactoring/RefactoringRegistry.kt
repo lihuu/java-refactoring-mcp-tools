@@ -4,10 +4,12 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiFile
 
 /**
- * Ordered collection of [RefactoringHandler]s. The orchestrator asks [resolve] for the first
- * handler that matches the caret. Default construction will (in a later task) contain the real
- * handlers; for now it accepts an injected list so it is unit-testable and so Task 3 can wire
- * the real handlers in.
+ * Ordered collection of [RefactoringHandler]s with first-applicable-wins [resolve].
+ *
+ * RESERVED: this is not used by the manual per-refactoring actions (each of those binds exactly
+ * one handler via [com.example.airefactoring.action.AbstractAiRefactorAction]). It is kept for a
+ * future auto-analysis / dispatch entry point that would pick a handler automatically from the
+ * caret context.
  */
 class RefactoringRegistry(private val handlers: List<RefactoringHandler>) {
 

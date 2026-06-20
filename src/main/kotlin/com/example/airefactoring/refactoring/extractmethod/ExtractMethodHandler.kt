@@ -33,6 +33,7 @@ class ExtractMethodHandler(
     private val validator = NameValidator()
     override val id = "extract_method"
     override val displayName = "code selection"
+    override val notApplicableMessage = "Select the code to extract into a method, or place the caret inside a statement."
 
     override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? {
         if (file !is PsiJavaFile) return null
