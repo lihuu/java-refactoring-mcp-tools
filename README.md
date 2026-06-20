@@ -1,6 +1,6 @@
 # AI Refactoring MVP
 
-IntelliJ IDEA plugin that uses an LLM to suggest Java symbol renames, then performs them via IntelliJ's native rename refactoring. The AI never edits source directly.
+IntelliJ IDEA plugin that uses an LLM to suggest Java refactorings, then performs them via IntelliJ's native refactoring API. The AI never edits source directly. Refactorings are pluggable behind a single `RefactoringHandler` extension point (see [Architecture](#architecture)); the one shipped today renames a Java local variable or field.
 
 ## Requirements
 
@@ -21,7 +21,53 @@ This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.in
 ./gradlew buildPlugin     # produce a distributable .zip in build/distributions/
 ```
 
-> **Note:** The Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) was not generated in this bootstrap because `gradle` is not available on the bootstrap host's `PATH`. To generate it, run `gradle wrapper --gradle-version 9.6 --distribution-type bin` once on a machine with Gradle 9.6+ installed (or use any IDE that auto-provisions the wrapper).
+## Architecture
+
+The plugin is organized around a single extension point: a **`RefactoringHandler`**. The
+action that fires on "AI Rename Symbol" is a *generic, refactoring-agnostic orchestrator* —
+it does not know anything about renaming. It runs a fixed pipeline and delegates every
+refactoring-specific decision to the handler that claims the caret:
+
+```
+action/AiRenameSymbolAction        generic orchestrator (Java guard → resolve → config →
+        │                          prompt → LLM → decode → validate → execute → notify)
+        │
+        ├─ refactoring/RefactoringRegistry      ordered handlers; first whose resolve() matches wins
+        ├─ refactoring/RefactoringHandler        the extension point (one impl = one refactoring)
+        ├─ refactoring/PromptEnvelope            shared, refactoring-agnostic prompt preamble
+        └─ refactoring/rename/RenameSymbolHandler   the only handler today; renames a local var/field
+```
+
+A `RefactoringHandler` owns its whole vertical slice:
+
+| Method | Responsibility |
+|---|---|
+| `resolve(file, offset)` | "Do I apply at this caret?" → a `RefactorTarget`, or `null` to pass |
+| `promptContribution(target)` | this refactoring's prompt rules + the JSON shape it expects |
+| `parse(actionJson)` | decode the LLM's action object into a `RefactorOperation` |
+| `validate(op, target, project)` | check the operation before applying it |
+| `execute(op, target, project, settings)` | apply it (via the native refactoring API) and return a success summary |
+
+The orchestrator handles only the shared concerns: the Java-file precondition, the
+`no_action` response, configuration checks, the LLM call, and notifications. The shared
+prompt preamble ("you must not edit code / return only JSON …") lives in `PromptEnvelope`;
+each handler contributes only its own rules.
+
+### Adding a refactoring
+
+1. Write a class implementing `RefactoringHandler` (e.g. under `refactoring/extractconstant/`).
+   Its `id` must equal the `"action"` string it emits/consumes in the LLM JSON.
+2. Register it in the `RefactoringRegistry` the action constructs (handlers are tried in
+   order; the first whose `resolve()` returns non-null claims the caret).
+
+No change to `AiRenameSymbolAction` or the LLM/notify layers is required. Rename-specific
+stages (`SymbolResolver`, `ContextCollector`, `NameValidator`, `IntellijRenameExecutor`)
+remain reusable building blocks that a handler composes — they are not referenced by the
+orchestrator.
+
+> **Note:** `RefactorTarget.element` is a `PsiNamedElement`, which fits all current
+> symbol-based refactorings. A future refactoring whose target is a non-named expression
+> (e.g. extract-constant) would widen this field to `PsiElement` — the natural next seam.
 
 ## Configuration
 
@@ -58,6 +104,6 @@ Each scenario must leave the IDE stable. AI must not edit source outside the ren
 These are deliberate trade-offs in the MVP, surfaced during code review:
 
 - **The LLM call runs on the UI thread.** `actionPerformed` invokes the network call synchronously, so the IDE UI is blocked while waiting for the LLM (up to the 60-second request timeout). A production version should run the LLM call on a background thread (e.g. `Task.Backgroundable`) and marshal the result back to the EDT for the rename. This does not affect correctness, only responsiveness.
-- **Caret must be on the symbol's declaration, not a usage.** The resolver maps the caret's identifier to its declaration only when the caret sits on the declaration. A caret on a *reference* (a use site) currently resolves to the enclosing method/class and is reported as unsupported. A production version should resolve references to their target declaration.
+- **Caret must be on the symbol's declaration, not a usage.** The rename handler maps the caret's identifier to its declaration only when the caret sits on the declaration. A caret on a *reference* (a use site) does not resolve to a supported symbol, so the action reports "No supported refactoring for the symbol under the caret." A production version should resolve references to their target declaration.
 - **No top-level error guard.** If an unexpected exception occurs after symbol resolution (e.g. during context collection or validation), it is logged by the IDE but not surfaced as a user notification. A production version should wrap the pipeline in a catch that shows a generic failure balloon.
 - **API key is stored in plain settings XML**, not the OS keychain (see MVP limitations above).
