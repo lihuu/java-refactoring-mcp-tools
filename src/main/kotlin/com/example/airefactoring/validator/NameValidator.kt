@@ -28,7 +28,7 @@ class NameValidator {
             // Methods share the same lowerCamelCase rule as local variables and fields.
             SymbolKind.LOCAL_VARIABLE, SymbolKind.FIELD, SymbolKind.METHOD -> {
                 if (!trimmed[0].isLowerCase()) {
-                    return ValidationResult.Invalid("Local variables and fields should use lowerCamelCase.")
+                    return ValidationResult.Invalid("'$trimmed' should use lowerCamelCase.")
                 }
             }
         }
