@@ -41,7 +41,6 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
         assertNotNull(target)
         target!!
-        assertEquals("rename_symbol", target.handlerId)
         assertEquals("userCount", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
         assertEquals(SymbolKind.LOCAL_VARIABLE, (target.context as RefactorContext).symbolKind)
     }
@@ -51,7 +50,6 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)
         assertNotNull(target)
         target!!
-        assertEquals("rename_symbol", target.handlerId)
         assertEquals("userName", target.element.let { it as com.intellij.psi.PsiNamedElement }.name)
         assertEquals(SymbolKind.FIELD, (target.context as RefactorContext).symbolKind)
     }

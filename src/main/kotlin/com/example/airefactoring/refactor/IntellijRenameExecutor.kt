@@ -19,7 +19,7 @@ class IntellijRenameExecutor : RenameExecutor {
                     newName,
                     /*searchInComments*/ false,
                     /*searchTextOccurrences*/ false,
-                ).also { it.setPreviewUsages(true) }.run()
+                ).also { it.setPreviewUsages(false) }.run()
             } else {
                 RefactoringFactory.getInstance(project)
                     .createRename(element, newName, false, false)

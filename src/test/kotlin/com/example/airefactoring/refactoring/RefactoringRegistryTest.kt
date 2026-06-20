@@ -29,8 +29,6 @@ class RefactoringRegistryTest : LightJavaCodeInsightFixtureTestCase() {
             if (caretOffset != matchOffset) return null
             return RefactorTarget(
                 element = element,
-                handlerId = id,
-                displayName = displayName,
                 context = RefactorContext(
                     language = "JAVA",
                     filePath = "Fake.java",
@@ -71,12 +69,12 @@ class RefactoringRegistryTest : LightJavaCodeInsightFixtureTestCase() {
         val r1 = registry.resolve(file, 1)
         assertNotNull(r1)
         assertSame(a, r1!!.first)
-        assertEquals("a", r1.second.handlerId)
+        assertEquals("a", r1.first.id)
 
         val r2 = registry.resolve(file, 2)
         assertNotNull(r2)
         assertSame(b, r2!!.first)
-        assertEquals("b", r2.second.handlerId)
+        assertEquals("b", r2.first.id)
 
         assertNull(registry.resolve(file, 99))
     }
@@ -91,7 +89,7 @@ class RefactoringRegistryTest : LightJavaCodeInsightFixtureTestCase() {
         val r = registry.resolve(file, 1)
         assertNotNull(r)
         assertSame(a2, r!!.first)
-        assertEquals("a2", r.second.handlerId)
+        assertEquals("a2", r.first.id)
     }
 
     fun testAllReturnsHandlersInOrder() {

@@ -31,8 +31,6 @@ class AbstractionWideningTest : LightJavaCodeInsightFixtureTestCase() {
         override fun resolve(file: PsiFile, caretOffset: Int): RefactorTarget? =
             RefactorTarget(
                 element = element,
-                handlerId = id,
-                displayName = displayName,
                 context = FakeContext("x + y"),
             )
 

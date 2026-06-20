@@ -40,8 +40,6 @@ class RenameSymbolHandler(
         return when (resolved) {
             is ResolvedSymbol.Resolved -> RefactorTarget(
                 element = resolved.element,
-                handlerId = id,
-                displayName = displayName,
                 context = collector.collect(file, resolved.element, resolved.kind),
             )
             is ResolvedSymbol.Unsupported,
