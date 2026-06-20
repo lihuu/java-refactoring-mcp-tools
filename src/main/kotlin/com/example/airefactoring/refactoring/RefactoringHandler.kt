@@ -9,10 +9,12 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * The unit of extension. One implementation = one AI refactoring (rename symbol, extract
- * constant, …). The orchestrator picks the first handler whose [resolve] matches the caret,
- * builds a prompt from [promptContribution], sends it to the LLM, then [parse]s, [validate]s,
- * and [execute]s the result. Adding a refactoring means writing one of these and registering
- * it in [RefactoringRegistry] — no orchestrator changes.
+ * method, …). Each refactoring is bound to its own action ([AbstractAiRefactorAction] subclass),
+ * which calls [resolve] at the caret/selection, builds a prompt from [promptContribution], sends
+ * it to the LLM, then [parse]s, [validate]s, and [execute]s the result. Adding a refactoring means
+ * writing one of these plus a thin action that binds it — no change to the shared pipeline.
+ * ([RefactoringRegistry] offers first-match dispatch over many handlers, reserved for a future
+ * auto-analysis entry point; the manual per-refactoring actions do not use it.)
  */
 interface RefactoringHandler {
     /** Stable identifier. MUST equal the LLM "action" string this handler emits/consumes. */
