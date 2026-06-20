@@ -1,10 +1,10 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.24"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
-    id("org.jetbrains.intellij") version "1.17.4"
+    id("org.jetbrains.kotlin.jvm") version "2.2.0"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0"
+    id("org.jetbrains.intellij.platform") version "2.6.0"
 }
 
 group = providers.gradleProperty("pluginGroup").get()
@@ -12,32 +12,48 @@ version = providers.gradleProperty("pluginVersion").get()
 
 repositories {
     mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+
+    // IntelliJ Platform Gradle Plugin 2.x: platform + bundled plugins + test framework
+    // are declared here as dependencies, not in a top-level `intellij {}` block.
+    intellijPlatform {
+        create(
+            providers.gradleProperty("platformType"),
+            providers.gradleProperty("platformVersion"),
+        )
+        bundledPlugin("com.intellij.java")
+
+        // Required for BasePlatformTestCase / LightJavaCodeInsightFixtureTestCase.
+        testFramework(TestFrameworkType.Platform)
+    }
+
+    // The platform test framework runs on JUnit 4.
+    testImplementation("junit:junit:4.13.2")
 }
 
 kotlin {
-    jvmToolchain(17)
+    // Single source of truth for the JDK: gradle.properties `javaVersion`.
+    // If the IDE's bundled runtime / Kotlin compiler rejects this value, lower
+    // it there (e.g. 25 -> 21); no other build change is required.
+    jvmToolchain(providers.gradleProperty("javaVersion").get().toInt())
 }
 
-intellij {
-    type.set(providers.gradleProperty("platformType"))
-    version.set(providers.gradleProperty("platformVersion"))
-    plugins.set(providers.gradleProperty("platformPlugins").map {
-        it.split(",").map(String::trim).filter(String::isNotEmpty)
-    })
+intellijPlatform {
+    pluginConfiguration {
+        ideaVersion {
+            sinceBuild = providers.gradleProperty("pluginSinceBuild")
+            untilBuild = providers.gradleProperty("pluginUntilBuild")
+        }
+    }
 }
 
 tasks {
-    withType<KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
-    }
-    patchPluginXml {
-        sinceBuild.set(providers.gradleProperty("pluginSinceBuild"))
-        untilBuild.set(providers.gradleProperty("pluginUntilBuild"))
-    }
     test {
         useJUnit()
     }
