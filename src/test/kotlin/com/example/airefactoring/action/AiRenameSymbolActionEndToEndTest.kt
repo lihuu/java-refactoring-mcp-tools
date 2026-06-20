@@ -141,4 +141,21 @@ class AiRenameSymbolActionEndToEndTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals(1, llm.calls)
         assertEquals(0, executor.calls)
     }
+
+    // The top-level guard must catch a NON-LlmException thrown after resolve (e.g. a bug or
+    // unexpected runtime failure during the LLM call): run(...) returns normally, nothing is
+    // applied. (The async Task.Backgroundable path is exercised manually via runIde, consistent
+    // with the executors' platform calls; it is not unit-tested here.)
+    fun testUnexpectedErrorIsCaughtAndDoesNotCrash() {
+        configureValidSettings()
+        myFixture.configureByFile("EndToEnd.java")
+        val llm = object : LlmClient {
+            override fun complete(systemPrompt: String, userPrompt: String, settings: AiRefactoringSettings.State): String =
+                throw RuntimeException("boom")
+        }
+        val executor = SpyExecutor(com.example.airefactoring.refactor.IntellijRenameExecutor())
+        val action = AiRenameSymbolAction(llmFactory = { llm }, executorFactory = { executor })
+        action.run(project, myFixture.editor, myFixture.file) // must NOT throw
+        assertEquals(0, executor.calls)
+    }
 }
