@@ -40,6 +40,9 @@ interface RefactoringHandler {
     /** Validate the operation against the target before executing. */
     fun validate(operation: RefactorOperation, target: RefactorTarget, project: Project): ValidationResult
 
-    /** Apply the operation. Must perform its own threading/write-action handling. */
-    fun execute(operation: RefactorOperation, target: RefactorTarget, project: Project, settings: AiRefactoringSettings.State)
+    /**
+     * Apply the operation and return a short success summary for the user notification.
+     * Must perform its own threading/write-action handling.
+     */
+    fun execute(operation: RefactorOperation, target: RefactorTarget, project: Project, settings: AiRefactoringSettings.State): String
 }

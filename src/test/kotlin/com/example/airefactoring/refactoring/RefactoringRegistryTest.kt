@@ -47,7 +47,7 @@ class RefactoringRegistryTest : LightJavaCodeInsightFixtureTestCase() {
         override fun promptContribution(target: RefactorTarget): PromptContribution = TODO()
         override fun parse(actionJson: JsonObject): RefactorOperation = TODO()
         override fun validate(operation: RefactorOperation, target: RefactorTarget, project: Project): ValidationResult = TODO()
-        override fun execute(operation: RefactorOperation, target: RefactorTarget, project: Project, settings: AiRefactoringSettings.State): Unit = TODO()
+        override fun execute(operation: RefactorOperation, target: RefactorTarget, project: Project, settings: AiRefactoringSettings.State): String = TODO()
     }
 
     private fun namedElement(): PsiNamedElement {

@@ -79,10 +79,13 @@ class RenameSymbolHandler(
         target: RefactorTarget,
         project: Project,
         settings: AiRefactoringSettings.State,
-    ) {
+    ): String {
         val op = operation as? RenameOperation
             ?: error("execute called with non-RenameOperation: ${operation::class.simpleName}")
+        // Capture the current name BEFORE the rename, since the element's name changes after.
+        val currentName = target.element.name ?: ""
         executorFactory().rename(project, target.element, op.newName, settings.enablePreview)
+        return "Renamed '$currentName' to '${op.newName}'."
     }
 
     /** Returns the field's string content, or null if missing or not a JSON string primitive. */

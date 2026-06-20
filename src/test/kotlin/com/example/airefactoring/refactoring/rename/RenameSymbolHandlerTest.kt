@@ -139,7 +139,7 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         val target = handler.resolve(myFixture.file, myFixture.editor.caretModel.offset)!!
         val spy = SpyExecutor(IntellijRenameExecutor())
         val handlerWithSpy = RenameSymbolHandler(executorFactory = { spy })
-        handlerWithSpy.execute(
+        val summary = handlerWithSpy.execute(
             RenameOperation("counter", null),
             target,
             project,
@@ -148,5 +148,6 @@ class RenameSymbolHandlerTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals(1, spy.calls)
         assertEquals("counter", spy.lastNewName)
         assertEquals(target.element, spy.lastElement)
+        assertEquals("Renamed 'userCount' to 'counter'.", summary)
     }
 }

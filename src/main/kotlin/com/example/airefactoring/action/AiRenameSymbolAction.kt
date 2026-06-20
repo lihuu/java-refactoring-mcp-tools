@@ -1,20 +1,17 @@
 package com.example.airefactoring.action
 
-import com.example.airefactoring.context.ContextCollector
 import com.example.airefactoring.llm.LlmClient
 import com.example.airefactoring.llm.LlmException
 import com.example.airefactoring.llm.OpenAiCompatibleLlmClient
 import com.example.airefactoring.notify.Notifier
-import com.example.airefactoring.parser.CommandParser
-import com.example.airefactoring.parser.InvalidCommandException
-import com.example.airefactoring.parser.RefactorCommand
-import com.example.airefactoring.prompt.PromptBuilder
 import com.example.airefactoring.refactor.IntellijRenameExecutor
 import com.example.airefactoring.refactor.RenameExecutor
-import com.example.airefactoring.resolver.ResolvedSymbol
-import com.example.airefactoring.resolver.SymbolResolver
+import com.example.airefactoring.refactoring.PromptEnvelope
+import com.example.airefactoring.refactoring.RefactorOperation
+import com.example.airefactoring.refactoring.RefactorParseException
+import com.example.airefactoring.refactoring.RefactoringRegistry
+import com.example.airefactoring.refactoring.rename.RenameSymbolHandler
 import com.example.airefactoring.settings.AiRefactoringSettings
-import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -23,16 +20,28 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiJavaFile
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
+/**
+ * Generic, refactoring-agnostic orchestrator. It resolves the symbol under the caret via the
+ * [RefactoringRegistry], assembles a prompt from the matching handler's contribution, calls the
+ * LLM, then decodes / validates / executes the result through that handler. Adding a refactoring
+ * means registering a new [com.example.airefactoring.refactoring.RefactoringHandler] — this class
+ * stays unchanged.
+ */
 class AiRenameSymbolAction(
     private val llmFactory: () -> LlmClient = ::OpenAiCompatibleLlmClient,
     private val executorFactory: () -> RenameExecutor = ::IntellijRenameExecutor,
+    private val registry: RefactoringRegistry =
+        RefactoringRegistry(listOf(RenameSymbolHandler(executorFactory))),
 ) : AnAction() {
 
-    private val resolver = SymbolResolver()
-    private val collector = ContextCollector()
-    private val parser = CommandParser()
-    private val validator = NameValidator()
+    private val json = Json { ignoreUnknownKeys = true }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -51,14 +60,14 @@ class AiRenameSymbolAction(
 
     /** Test seam used by AiRenameSymbolActionEndToEndTest. Synchronous. */
     fun runForTest(project: Project, editor: Editor, file: PsiFile) {
-        val resolved = resolver.resolve(file, editor.caretModel.offset)
-        when (resolved) {
-            is ResolvedSymbol.NotJava -> return Notifier.error(project, "AI Refactoring MVP only supports Java files.")
-            is ResolvedSymbol.NotFound -> return Notifier.error(project, "No symbol under caret.")
-            is ResolvedSymbol.Unsupported -> return Notifier.error(project, resolved.reason)
-            is ResolvedSymbol.Resolved -> Unit
+        // Temporary MVP-level precondition: only Java files are supported. Lifting this later
+        // would mean a per-handler language capability rather than a shared guard here.
+        if (file !is PsiJavaFile) {
+            return Notifier.error(project, "AI Refactoring MVP only supports Java files.")
         }
-        resolved as ResolvedSymbol.Resolved
+
+        val (handler, target) = registry.resolve(file, editor.caretModel.offset)
+            ?: return Notifier.error(project, "No supported refactoring for the symbol under the caret.")
 
         val settings = AiRefactoringSettings.getInstance().state
         if (settings.apiKey.isBlank() || settings.model.isBlank() || settings.baseUrl.isBlank()) {
@@ -68,8 +77,7 @@ class AiRenameSymbolAction(
             )
         }
 
-        val ctx = collector.collect(file, resolved.element, resolved.kind)
-        val (system, user) = PromptBuilder.build(ctx)
+        val (system, user) = PromptEnvelope.assemble(handler.promptContribution(target), target)
 
         val raw = try {
             llmFactory().complete(system, user, settings)
@@ -79,24 +87,43 @@ class AiRenameSymbolAction(
             return Notifier.error(project, "AI call failed: ${e.message}")
         }
 
-        val cmd = try {
-            parser.parse(raw)
-        } catch (e: InvalidCommandException) {
-            return Notifier.error(project, e.userMessage)
+        val obj = parseObject(raw)
+            ?: return Notifier.error(project, "AI response is invalid.")
+        val action = obj.stringField("action")
+            ?: return Notifier.error(project, "AI response is invalid.")
+
+        val op: RefactorOperation = when (action) {
+            "no_action" -> return Notifier.info(project, "No refactoring suggested.")
+            handler.id -> try {
+                handler.parse(obj)
+            } catch (e: RefactorParseException) {
+                return Notifier.error(project, e.userMessage)
+            }
+            else -> return Notifier.error(project, "AI response is invalid.")
         }
 
-        when (cmd) {
-            is RefactorCommand.NoAction -> Notifier.info(project, "No refactoring suggested.")
-            is RefactorCommand.RenameSymbol -> {
-                val current = resolved.element.name ?: ""
-                when (val v = validator.validate(cmd.newName, resolved.kind, current, project)) {
-                    is ValidationResult.Invalid -> Notifier.error(project, "Proposed name is invalid: ${v.message}")
-                    ValidationResult.Ok -> {
-                        executorFactory().rename(project, resolved.element, cmd.newName, settings.enablePreview)
-                        Notifier.info(project, "Renamed '$current' to '${cmd.newName}'.")
-                    }
-                }
-            }
+        when (val v = handler.validate(op, target, project)) {
+            is ValidationResult.Invalid -> return Notifier.error(project, "Proposed refactoring is invalid: ${v.message}")
+            ValidationResult.Ok -> {}
         }
+
+        val summary = handler.execute(op, target, project, settings)
+        Notifier.info(project, summary)
+    }
+
+    /** Parse [raw] (trimmed) into a [JsonObject], or null if it is malformed or not an object. */
+    private fun parseObject(raw: String): JsonObject? =
+        try {
+            json.parseToJsonElement(raw.trim()) as? JsonObject
+        } catch (_: Exception) {
+            null
+        }
+
+    /** Returns the field's string content, or null if missing or not a JSON string primitive. */
+    private fun JsonObject.stringField(name: String): String? {
+        val element: JsonElement = this[name] ?: return null
+        val primitive = element as? JsonPrimitive ?: return null
+        if (!primitive.isString) return null
+        return primitive.contentOrNull
     }
 }
