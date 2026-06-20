@@ -4,6 +4,7 @@ import com.example.airefactoring.settings.AiRefactoringSettings
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The unit of extension. One implementation = one AI refactoring (rename symbol, extract
@@ -29,12 +30,12 @@ interface RefactoringHandler {
     fun promptContribution(target: RefactorTarget): PromptContribution
 
     /**
-     * Decode the action-specific JSON object the LLM returned into an operation.
-     * [actionJson] is the already-parsed top-level JSON object's content for this handler.
-     * Throw [com.example.airefactoring.refactoring.RefactorParseException] on malformed input.
+     * Decode the LLM's action object into an operation. [actionJson] is the entire top-level
+     * JSON object the LLM returned, whose `action` field equals this handler's [id] (not a
+     * nested slice). Throw [RefactorParseException] on malformed/unsupported input.
      * The shared "no_action" shape is handled by the orchestrator, not here.
      */
-    fun parse(actionJson: kotlinx.serialization.json.JsonObject): RefactorOperation
+    fun parse(actionJson: JsonObject): RefactorOperation
 
     /** Validate the operation against the target before executing. */
     fun validate(operation: RefactorOperation, target: RefactorTarget, project: Project): ValidationResult
