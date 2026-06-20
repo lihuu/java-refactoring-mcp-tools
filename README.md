@@ -4,13 +4,13 @@ IntelliJ IDEA plugin that uses an LLM to suggest Java symbol renames, then perfo
 
 ## Requirements
 
-- JDK 21 (the build is configured for JDK 25 via `javaVersion` in `gradle.properties`; see the note below)
-- Gradle 8.14 (the wrapper handles this once initialized)
+- JDK 21
+- Gradle 9.6 (the wrapper handles this once initialized)
 - IntelliJ IDEA 2026.1+ for development
 
-This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.intellij.platform`), Kotlin 2.2, and targets IntelliJ IDEA Community 2026.1.
+This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.intellij.platform` 2.16.0), Kotlin 2.4, and targets IntelliJ IDEA Community 2026.1.3.
 
-> **JDK version note:** `gradle.properties` sets `javaVersion=25`. IntelliJ plugins run on the JetBrains Runtime bundled with the target IDE, and the Kotlin compiler's `jvmTarget` is capped by the compiler version. If `./gradlew build` or `runIde` fails to compile (`jvmTarget` ceiling) or the plugin fails to load, lower `javaVersion` to `21` in `gradle.properties` — that single value is the only thing to change.
+> **JDK version note:** the build targets JDK 21 (`javaVersion` in `gradle.properties`). IntelliJ IDEA 2026.1 runs on the JetBrains Runtime (JBR 21), and Kotlin 2.4's `jvmTarget` tops out at JVM 24 — so a newer JDK such as 25 would neither compile nor load in the IDE. 21 is the latest usable target for this platform.
 
 ## Development
 
@@ -21,7 +21,7 @@ This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.in
 ./gradlew buildPlugin     # produce a distributable .zip in build/distributions/
 ```
 
-> **Note:** The Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) was not generated in this bootstrap because `gradle` is not available on the bootstrap host's `PATH`. To generate it, run `gradle wrapper --gradle-version 8.14 --distribution-type bin` once on a machine with Gradle 8.14+ installed (or use any IDE that auto-provisions the wrapper).
+> **Note:** The Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) was not generated in this bootstrap because `gradle` is not available on the bootstrap host's `PATH`. To generate it, run `gradle wrapper --gradle-version 9.6 --distribution-type bin` once on a machine with Gradle 9.6+ installed (or use any IDE that auto-provisions the wrapper).
 
 ## Configuration
 
@@ -40,7 +40,7 @@ After installing or running in sandbox, open **Settings → Tools → AI Refacto
 
 ## Manual sandbox verification (MVP acceptance)
 
-Run `./gradlew runIde` and execute each scenario. Record pass/fail. (Requires Gradle 8.14 + JDK 21/25; the Gradle wrapper must be generated first — see Development.)
+Run `./gradlew runIde` and execute each scenario. Record pass/fail. (Requires Gradle 9.6 + JDK 21; the Gradle wrapper must be generated first — see Development.)
 
 - [ ] Java local variable rename — caret on a local var declaration, AI returns rename, native preview/dialog appears (if Enable Preview is on), variable + usages update.
 - [ ] Java field rename — same flow on a private/public field.
