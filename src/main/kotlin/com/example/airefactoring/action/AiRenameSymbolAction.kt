@@ -11,6 +11,7 @@ import com.example.airefactoring.refactoring.RefactorOperation
 import com.example.airefactoring.refactoring.RefactorParseException
 import com.example.airefactoring.refactoring.RefactoringRegistry
 import com.example.airefactoring.refactoring.rename.RenameSymbolHandler
+import com.example.airefactoring.refactoring.stringField
 import com.example.airefactoring.settings.AiRefactoringSettings
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -22,10 +23,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiJavaFile
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 /**
  * Generic, refactoring-agnostic orchestrator. It resolves the symbol under the caret via the
@@ -118,12 +116,4 @@ class AiRenameSymbolAction(
         } catch (_: Exception) {
             null
         }
-
-    /** Returns the field's string content, or null if missing or not a JSON string primitive. */
-    private fun JsonObject.stringField(name: String): String? {
-        val element: JsonElement = this[name] ?: return null
-        val primitive = element as? JsonPrimitive ?: return null
-        if (!primitive.isString) return null
-        return primitive.contentOrNull
-    }
 }

@@ -4,11 +4,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * Shared, refactoring-agnostic prompt assembly. Holds the parts of the original
- * [com.example.airefactoring.prompt.PromptBuilder] SYSTEM string that are not specific to any one
- * refactoring (the "you must not edit code / return only JSON / no prose / no code fences"
- * preamble) and assembles the final (system, user) prompt pair from a chosen handler's
- * [PromptContribution] plus the target context.
+ * Shared, refactoring-agnostic prompt assembly. Holds the refactoring-agnostic preamble (you must
+ * not edit code / return only JSON / no prose / no code fences) and assembles the final
+ * (system, user) prompt pair from a chosen handler's [PromptContribution] plus the target context.
  */
 object PromptEnvelope {
     private val json = Json { prettyPrint = true; encodeDefaults = false }

@@ -8,6 +8,7 @@ import com.example.airefactoring.refactoring.RefactorOperation
 import com.example.airefactoring.refactoring.RefactorParseException
 import com.example.airefactoring.refactoring.RefactorTarget
 import com.example.airefactoring.refactoring.RefactoringHandler
+import com.example.airefactoring.refactoring.stringField
 import com.example.airefactoring.resolver.ResolvedSymbol
 import com.example.airefactoring.resolver.SymbolResolver
 import com.example.airefactoring.settings.AiRefactoringSettings
@@ -15,10 +16,7 @@ import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 /**
  * First concrete [RefactoringHandler]: renames a Java local variable or field. Delegates resolution,
@@ -86,14 +84,6 @@ class RenameSymbolHandler(
         val currentName = target.element.name ?: ""
         executorFactory().rename(project, target.element, op.newName, settings.enablePreview)
         return "Renamed '$currentName' to '${op.newName}'."
-    }
-
-    /** Returns the field's string content, or null if missing or not a JSON string primitive. */
-    private fun JsonObject.stringField(name: String): String? {
-        val element: JsonElement = this[name] ?: return null
-        val primitive = element as? JsonPrimitive ?: return null
-        if (!primitive.isString) return null
-        return primitive.contentOrNull
     }
 
     companion object {
