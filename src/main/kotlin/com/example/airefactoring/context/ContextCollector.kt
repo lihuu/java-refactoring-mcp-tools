@@ -30,6 +30,9 @@ class ContextCollector {
             // ContextCollector is only used by the rename handler (local var / field). METHOD is
             // never passed here; this branch only keeps the exhaustive `when` compiling.
             SymbolKind.METHOD -> element.text.orEmpty()
+            // ContextCollector is only used by the rename handler (local var / field). CLASS is
+            // never passed here; this branch only keeps the exhaustive `when` compiling.
+            SymbolKind.CLASS -> element.text.orEmpty()
         }
 
         return RefactorContext(

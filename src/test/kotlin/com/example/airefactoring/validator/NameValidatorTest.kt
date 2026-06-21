@@ -46,4 +46,21 @@ class NameValidatorTest {
         assertTrue(v.validate("UserName", SymbolKind.FIELD, "n", null)
             is ValidationResult.Invalid)
     }
+
+    @Test fun acceptsUpperCamelCaseClass() {
+        assertEquals(ValidationResult.Ok,
+            v.validate("UserData", SymbolKind.CLASS, "", null))
+    }
+
+    @Test fun rejectsLowerCamelForClass() {
+        assertTrue(v.validate("userData", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
+    }
+
+    @Test fun rejectsKeywordForClass() {
+        assertTrue(v.validate("class", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
+    }
+
+    @Test fun rejectsEmptyForClass() {
+        assertTrue(v.validate("", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
+    }
 }

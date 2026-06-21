@@ -31,6 +31,11 @@ class NameValidator {
                     return ValidationResult.Invalid("'$trimmed' should use lowerCamelCase.")
                 }
             }
+            SymbolKind.CLASS -> {
+                if (!trimmed[0].isUpperCase()) {
+                    return ValidationResult.Invalid("'$trimmed' should use UpperCamelCase.")
+                }
+            }
         }
 
         return ValidationResult.Ok

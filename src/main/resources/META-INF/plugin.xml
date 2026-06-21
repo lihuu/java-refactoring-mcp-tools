@@ -37,5 +37,12 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="CodeMenu" anchor="last"/>
         </action>
+        <action id="com.example.airefactoring.AiIntroduceParameterObject"
+                class="com.example.airefactoring.action.AiIntroduceParameterObjectAction"
+                text="AI Introduce Parameter Object"
+                description="Ask AI to fold the method's parameters into a parameter object">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="CodeMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
