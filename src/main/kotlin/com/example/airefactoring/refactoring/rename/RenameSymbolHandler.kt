@@ -39,8 +39,8 @@ class RenameSymbolHandler(
 
     override fun resolve(file: PsiFile, editor: Editor, caretOffset: Int): RefactorTarget? {
         // Rename ignores the editor: it targets the symbol under the caret, no selection needed.
-        val resolved = resolver.resolve(file, caretOffset)
-        return when (resolved) {
+        // 这里直接传递变量的名字似乎不是很好吧
+        return when (val resolved = resolver.resolve(file, caretOffset)) {
             is ResolvedSymbol.Resolved -> RefactorTarget(
                 element = resolved.element,
                 context = collector.collect(file, resolved.element, resolved.kind),
