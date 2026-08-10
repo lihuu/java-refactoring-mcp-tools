@@ -41,6 +41,26 @@ class NameValidator {
         return ValidationResult.Ok
     }
 
+    fun validateMethodName(newName: String, project: Project?): ValidationResult {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return ValidationResult.Invalid("Method name must not be empty.")
+        if (trimmed in JAVA_KEYWORDS) {
+            return ValidationResult.Invalid("'$trimmed' is a Java keyword.")
+        }
+        val identifierOk = if (project != null) {
+            PsiNameHelper.getInstance(project).isIdentifier(trimmed)
+        } else {
+            isPlainJavaIdentifier(trimmed)
+        }
+        if (!identifierOk) {
+            return ValidationResult.Invalid("'$trimmed' is not a valid Java identifier.")
+        }
+        if (!trimmed[0].isLowerCase()) {
+            return ValidationResult.Invalid("'$trimmed' should use lowerCamelCase.")
+        }
+        return ValidationResult.Ok
+    }
+
     private fun isPlainJavaIdentifier(s: String): Boolean {
         if (s.isEmpty()) return false
         if (!Character.isJavaIdentifierStart(s[0])) return false

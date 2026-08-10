@@ -1,6 +1,5 @@
 package com.example.airefactoring.validator
 
-import com.example.airefactoring.resolver.SymbolKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,59 +7,29 @@ import org.junit.Test
 class NameValidatorTest {
     private val v = NameValidator()
 
-    @Test fun acceptsLowerCamelCaseLocalVariable() {
-        assertEquals(ValidationResult.Ok,
-            v.validate("userRepository", SymbolKind.LOCAL_VARIABLE, "u", project = null))
-    }
-
-    @Test fun acceptsLowerCamelCaseField() {
-        assertEquals(ValidationResult.Ok,
-            v.validate("userName", SymbolKind.FIELD, "name", project = null))
+    @Test fun acceptsLowerCamelCaseMethodName() {
+        assertEquals(ValidationResult.Ok, v.validateMethodName("calculateTotal", project = null))
     }
 
     @Test fun rejectsEmpty() {
-        assertTrue(v.validate("", SymbolKind.FIELD, "x", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("", null) is ValidationResult.Invalid)
     }
 
     @Test fun rejectsBlank() {
-        assertTrue(v.validate("   ", SymbolKind.FIELD, "x", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("   ", null) is ValidationResult.Invalid)
     }
 
     @Test fun rejectsJavaKeyword() {
-        assertTrue(v.validate("class", SymbolKind.LOCAL_VARIABLE, "c", null) is ValidationResult.Invalid)
-        assertTrue(v.validate("return", SymbolKind.FIELD, "r", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("class", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("return", null) is ValidationResult.Invalid)
     }
 
     @Test fun rejectsInvalidIdentifier() {
-        assertTrue(v.validate("123name", SymbolKind.FIELD, "n", null) is ValidationResult.Invalid)
-        assertTrue(v.validate("user-name", SymbolKind.FIELD, "n", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("123name", null) is ValidationResult.Invalid)
+        assertTrue(v.validateMethodName("user-name", null) is ValidationResult.Invalid)
     }
 
-    @Test fun rejectsSameName() {
-        assertTrue(v.validate("name", SymbolKind.FIELD, "name", null) is ValidationResult.Invalid)
-    }
-
-    @Test fun rejectsUpperCamelForLocalOrField() {
-        assertTrue(v.validate("UserRepository", SymbolKind.LOCAL_VARIABLE, "u", null)
-            is ValidationResult.Invalid)
-        assertTrue(v.validate("UserName", SymbolKind.FIELD, "n", null)
-            is ValidationResult.Invalid)
-    }
-
-    @Test fun acceptsUpperCamelCaseClass() {
-        assertEquals(ValidationResult.Ok,
-            v.validate("UserData", SymbolKind.CLASS, "", null))
-    }
-
-    @Test fun rejectsLowerCamelForClass() {
-        assertTrue(v.validate("userData", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
-    }
-
-    @Test fun rejectsKeywordForClass() {
-        assertTrue(v.validate("class", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
-    }
-
-    @Test fun rejectsEmptyForClass() {
-        assertTrue(v.validate("", SymbolKind.CLASS, "", null) is ValidationResult.Invalid)
+    @Test fun rejectsUpperCamelMethodName() {
+        assertTrue(v.validateMethodName("CalculateTotal", null) is ValidationResult.Invalid)
     }
 }
