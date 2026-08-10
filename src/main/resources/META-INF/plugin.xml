@@ -11,6 +11,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
+    <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="AI Refactoring" displayType="BALLOON"/>
@@ -20,6 +21,8 @@
                 instance="com.example.airefactoring.settings.AiRefactoringConfigurable"
                 id="com.example.airefactoring.settings"
                 displayName="AI Refactoring"/>
+        <mcpServer.mcpToolset
+                implementation="com.example.airefactoring.mcp.ExtractMethodMcpToolset"/>
     </extensions>
 
     <actions>

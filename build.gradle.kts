@@ -27,6 +27,7 @@ dependencies {
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion").get())
         bundledPlugin("com.intellij.java")
+        bundledPlugin("com.intellij.mcpServer")
 
         // Required for BasePlatformTestCase / LightJavaCodeInsightFixtureTestCase.
         testFramework(TestFrameworkType.Platform)
