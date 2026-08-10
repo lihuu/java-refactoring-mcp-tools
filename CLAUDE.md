@@ -2,85 +2,50 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build / Test / Run
+## Build / Test
 
 ```bash
-./gradlew build           # compile and run all tests
-./gradlew test            # run tests only
-./gradlew test --tests "com.example.airefactoring.action.AiRenameSymbolActionEndToEndTest"  # single test class
-./gradlew runIde          # launch sandbox IntelliJ with the plugin loaded
-./gradlew buildPlugin     # produce distributable .zip in build/distributions/
+./gradlew test          # run tests only
+./gradlew buildPlugin   # produce a distributable .zip in build/distributions/
+./gradlew runIde        # launch sandbox IntelliJ with the plugin loaded
 ```
 
-Tests use JUnit 4 (`LightJavaCodeInsightFixtureTestCase`). The Gradle wrapper is committed; everything needs JDK 21 (IntelliJ 2026.1's JBR runs on 21, and Kotlin 2.4's jvmTarget tops out at 24).
+Tests use JUnit 4 (`LightJavaCodeInsightFixtureTestCase`). The Gradle wrapper is committed; everything needs JDK 21 (IntelliJ 2026.1 runs on JBR 21, and Kotlin 2.4's `jvmTarget` tops out at JVM 24).
 
 ## Architecture
 
-This is an IntelliJ IDEA plugin that uses an LLM to suggest Java refactorings, then applies them via IntelliJ's native refactoring API — the AI never edits source directly.
+This is an IntelliJ IDEA plugin that contributes native refactorings to the IDE's built-in MCP Server. It does not call an LLM and never edits source text directly; every mutation goes through IntelliJ's native refactoring API.
 
-### Pipeline (orchestrator → handler)
+### MCP registration
 
-`AbstractAiRefactorAction` is the **refactoring-agnostic orchestrator**. Each refactoring has a thin action subclass that binds exactly one `RefactoringHandler`. The orchestrator runs a fixed pipeline:
+- The plugin depends on the bundled `com.intellij.mcpServer` and `com.intellij.java` plugins (see `META-INF/plugin.xml`).
+- `ExtractMethodMcpToolset` implements `com.intellij.mcpserver.McpToolset`. Its `java_extract_method` suspend function is annotated `@McpTool` and `@McpDescription` and declares only the six client-facing arguments; the MCP host routes the resolved `Project` through the coroutine context (`com.intellij.mcpserver.project`).
+- The class is registered via `<mcpServer.mcpToolset>` in `META-INF/plugin.xml`.
 
-1. Java-file guard
-2. `handler.resolve(file, editor, caretOffset)` → `RefactorTarget` or `null`
-3. Configuration check (base URL, API key, model)
-4. `PromptEnvelope.assemble(handler.promptContribution(target), target)` → (system, user)
-5. `LlmClient.complete()` — the only network call, runs on `Task.Backgroundable` (never blocks EDT)
-6. Parse JSON → dispatch on `"action"` field (`"no_action"` handled by orchestrator, handler's `id` routed to `handler.parse()`)
-7. `handler.validate()`
-8. `handler.execute()` — must call native refactoring API (no PSI mutations in the handler)
-9. Notify user
+### Tool contract
 
-The orchestrator knows nothing about any specific refactoring. Every refactoring-specific decision lives in the handler.
+`java_extract_method` input: `pathInProject` (project-relative Java file path), `startLine`/`startColumn` (1-based inclusive), `endLine`/`endColumn` (1-based, end exclusive), `methodName` (lower-camel-case Java identifier).
 
-### RefactoringHandler (the extension point)
+Failures return a JSON envelope `{"ok": false, "code": "...", "message": "..."}` with one of the stable codes: `FILE_NOT_FOUND`, `OUTSIDE_PROJECT`, `NOT_JAVA_FILE`, `READ_ONLY`, `INVALID_RANGE`, `INVALID_METHOD_NAME`, `NO_EXTRACTABLE_ELEMENTS`, `PREPARE_FAILED`, `REFACTORING_FAILED`. Cancellation is rethrown as `ProcessCanceledException` so the IDE and MCP client preserve cancellation semantics.
 
-One `RefactoringHandler` = one AI refactoring. Adding a refactoring means writing a handler + a thin action class + registering the action in `plugin.xml` — no change to the orchestrator. The handler owns its entire vertical slice:
+### Threading and safety rules
 
-| Method | Responsibility |
-|---|---|
-| `id` | Stable string; must equal the LLM `"action"` value |
-| `resolve(file, editor, caretOffset)` | "Do I apply here?" → `RefactorTarget` or `null` |
-| `promptContribution(target)` | Handler-specific prompt rules + expected JSON shape |
-| `parse(actionJson)` | Decode LLM's JSON into a `RefactorOperation` |
-| `validate(op, target, project)` | Check the operation before applying |
-| `execute(op, target, project, settings)` | Apply via native refactoring API; return success summary |
-
-### Key design decisions
-
-- **Per-refactoring entry points, not auto-dispatch.** Each refactoring has its own menu action (the user picks the refactoring explicitly). `RefactoringRegistry` exists but is reserved for a future auto-analysis entry point; it is not used by the current actions.
-- **AI never edits source.** All mutations go through IntelliJ's refactoring API (`RenameRefactoring`, `ExtractMethodHandler`, `IntroduceParameterObjectHandler`). The LLM only produces JSON metadata (a name, a reason).
-- **Prompt assembly: envelope + contribution.** `PromptEnvelope` provides the shared preamble (JSON-only, no code, no prose). Each handler contributes only its rules and JSON shape via `PromptContribution`.
-- **Test seam.** `AbstractAiRefactorAction.run(project, editor, file)` is the synchronous test entry point. Actions accept `llmFactory` and `executorFactory` lambdas for injecting fakes/spies. End-to-end tests use `LightJavaCodeInsightFixtureTestCase` with `FakeLlm` and `SpyExecutor`, verifying that the pipeline reaches the executor (or doesn't) without making real network calls.
-- **LlmClient is a thin interface** (`complete(system, user, settings) -> String`). The only implementation is `OpenAiCompatibleLlmClient` using the official `com.openai:openai-java` SDK pointed at any OpenAI-compatible endpoint.
+- All document and refactoring interaction runs on the EDT in one uninterrupted operation inside the tool's `execute`, so user edits cannot invalidate a resolved target between resolution and mutation.
+- One tool call is grouped as one IDE command via `CommandProcessor`, so one Undo reverses one extraction.
+- The resolver converts the 1-based range to an exclusive-end offset range, then requires an exact expression (`findExpressionInRange`) or statement block (`findStatementsInRange`) match; an empty result is rejected, never broadened or guessed.
+- Method names are validated before processor execution.
+- The native processor is the only mutator. If it refuses a selection, the tool returns `PREPARE_FAILED` or `REFACTORING_FAILED`; it never falls back to patches, text replacement, or direct PSI mutation.
 
 ### Package map
 
 | Package | Purpose |
 |---|---|
-| `action/` | `AbstractAiRefactorAction` orchestrator + per-refactoring thin action subclasses |
-| `refactoring/` | `RefactoringHandler` interface, `PromptEnvelope`, `PromptContribution`, `RefactorTarget`, `RefactorOperation`, `RefactoringRegistry` |
-| `refactoring/rename/` | Rename handler + operation |
-| `refactoring/extractmethod/` | Extract-method handler + operation + executor |
-| `refactoring/introduceparameterobject/` | Introduce-parameter-object handler + operation + executor |
-| `llm/` | `LlmClient` interface, `OpenAiCompatibleLlmClient`, `LlmException` |
-| `settings/` | `AiRefactoringSettings` (persistent state) + configurable UI |
-| `context/` | `ContextCollector` — gathers PSI context around a symbol for the LLM prompt |
-| `resolver/` | `SymbolResolver` — resolves a caret offset to a `ResolvedSymbol` (local var, field, etc.) |
-| `validator/` | `NameValidator` — rejects Java keywords, reserved words, invalid identifiers |
-| `refactor/` | `IntellijRenameExecutor` — thin wrapper around IntelliJ's `RenameRefactoring` |
-| `notify/` | `Notifier` — balloon notifications via IntelliJ's notification API |
+| `mcp/` | `ExtractMethodMcpToolset` — the MCP tool (`java_extract_method`); `McpRefactoringResult` + `McpRefactoringErrorCode` — the JSON result envelope |
+| `refactoring/extractmethod/` | `ExtractMethodSelectionResolver` (source range → current PSI elements), `ExtractMethodExecutor` interface, `IntellijExtractMethodExecutor` (native processor, one-command Undo) |
+| `validator/` | `NameValidator` + `ValidationResult` — rejects Java keywords, reserved words, invalid identifiers |
 
-### Three shipped handlers
+## Definition of done
 
-1. **Rename Symbol** (`rename_symbol`) — AI-semantic detection; caret on a local var/field declaration, AI decides whether to rename.
-2. **Extract Method** (`extract_method`) — selection-based; user selects a block, AI names the extracted method.
-3. **Introduce Parameter Object** (`introduce_parameter_object`) — hard-rule detection (≥ 3 params); AI only names the new class.
-
-## Dependencies
-
-- IntelliJ Platform Gradle Plugin 2.16.0 (targets `2026.1.3`)
-- Kotlin 2.4.0 + kotlinx-serialization-json 1.11.0
-- `com.openai:openai-java:4.41.0` (official OpenAI Java SDK)
-- JUnit 4.13.2 (platform test framework)
+- `./gradlew test` passes.
+- `./gradlew buildPlugin` passes.
+- Every write path preserves one-command Undo and goes through the native refactoring API.

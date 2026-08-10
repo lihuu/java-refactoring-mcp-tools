@@ -1,170 +1,132 @@
-# AI Refactoring MVP
+# IntelliJ Refactoring MCP Tools
 
-IntelliJ IDEA plugin that uses an LLM to suggest Java refactorings, then performs them via IntelliJ's native refactoring API. The AI never edits source directly. Refactorings are pluggable behind a single `RefactoringHandler` extension point (see [Architecture](#architecture)); the ones shipped today rename a Java local variable or field, extract a selected block into a new method, and introduce a parameter object for a method's parameters. See the [Roadmap](#roadmap) for where this is going.
+An IntelliJ IDEA plugin that exposes native IntelliJ refactorings to AI coding agents through the
+IDE's built-in MCP Server, so agents plan and get approval before any source change — the plugin
+never edits text directly and never calls an LLM itself.
 
-## Roadmap
-
-The plugin is built smell-first: refactoring is driven by code **bad smells** (Fowler's
-catalog), where each smell maps to one or more refactoring handlers. The full direction and
-the 24-smell catalog live in [`docs/design/`](docs/design/). The near-term work is the
-**starter set** — a minimal set of smells chosen to exercise every part of the pipeline
-(hard-rule detection, AI-semantic detection, a brand-new handler, and reusing an existing
-handler) before fanning out to the rest.
-
-### Done
-
-- **Pluggable architecture.** One `RefactoringHandler` = one refactoring; the shared
-  orchestrator (`AbstractAiRefactorAction`) owns the pipeline, handlers own their vertical slice.
-- **Per-refactoring entry points.** Each refactoring has its own reliable AI-triggered action,
-  so basic refactorings are usable today.
-- **OpenAI SDK integration.** Talks to any OpenAI-compatible endpoint via the official
-  `com.openai:openai-java` SDK.
-- **Non-blocking + crash-safe pipeline.** The LLM call runs on a background `Task.Backgroundable`
-  (the UI thread never blocks); a top-level guard surfaces unexpected failures as notifications.
-- **Three shipped handlers:**
-  - **Rename Symbol** — Mysterious Name → Rename (AI-semantic detection).
-  - **Extract Method** — Long Function / Duplicated Code → Extract Method (selection-based).
-  - **Introduce Parameter Object** — Long Parameter List → Introduce Parameter Object
-    (hard-rule detection: applies only when a method has ≥ 3 parameters; all params folded,
-    AI only names the class).
-
-### Next (starter set, remaining)
-
-- **Duplicated Code → Extract Method** — a new *detection* reusing the existing Extract handler;
-  validates "one smell reuses an existing action" and the IntelliJ-inspection detection path.
-
-### Later (planned, not started)
-
-- **Smell detection layer.** Reuse IntelliJ's built-in inspections to *locate* smells
-  (Long Method, Long Parameter List, duplicates …) so hard-detectable smells no longer need
-  the user to pick the code. AI stays limited to naming and fuzzy-smell confirmation.
-- **File-level multi-step analysis.** Point at a file → analyze → emit an ordered sequence of
-  refactoring actions → apply step by step. Uses **semantic anchors** (not `PsiElement`/offsets)
-  re-resolved before each step, because each apply can invalidate later steps' PSI.
-- **More handlers** from the catalog's second tier (Feature Envy → Move Method, Data Clumps,
-  Message Chains → Hide Delegate, …).
-
-> Design docs: [`docs/design/2026-06-20-smell-driven-refactoring-direction.md`](docs/design/2026-06-20-smell-driven-refactoring-direction.md)
-> (direction, three-tier triage, locked decisions) and
-> [`docs/design/refactoring-smells-catalog.md`](docs/design/refactoring-smells-catalog.md)
-> (the 24 smells).
+The validation release exposes exactly one tool: **`java_extract_method`**.
 
 ## Requirements
 
 - JDK 21
-- Gradle 9.6 (the wrapper handles this once initialized)
-- IntelliJ IDEA 2026.1+ for development
+- IntelliJ IDEA 2026.1.3 (build 261) — the plugin is built against the platform 2026.1.3 and
+  depends on the bundled `com.intellij.mcpServer` and `com.intellij.java` plugins.
 
-This project uses the **IntelliJ Platform Gradle Plugin 2.x** (`org.jetbrains.intellij.platform` 2.16.0), Kotlin 2.4, and targets IntelliJ IDEA Community 2026.1.3.
+## Architecture
 
-> **JDK version note:** the build targets JDK 21 (`javaVersion` in `gradle.properties`). IntelliJ IDEA 2026.1 runs on the JetBrains Runtime (JBR 21), and Kotlin 2.4's `jvmTarget` tops out at JVM 24 — so a newer JDK such as 25 would neither compile nor load in the IDE. 21 is the latest usable target for this platform.
+```text
+Codex (or another MCP client)
+        |
+        | java_extract_method
+        v
+IntelliJ MCP Server
+        |
+        v
+java_extract_method (ExtractMethodMcpToolset)
+        |
+        v
+Native IntelliJ Extract Method processor
+        |
+        v
+PSI-aware source change grouped as one IDE command
+```
+
+The MCP Server owns transport, authentication, project routing, JSON Schema generation, and client
+connectivity. The plugin owns input validation, current-PSI resolution, and native refactoring
+execution.
+
+## Enabling the MCP tool
+
+1. Run the plugin in a sandbox IDE: `./gradlew runIde`.
+2. With the plugin loaded, `java_extract_method` is registered in the built-in MCP Server and
+   appears in **Settings | Tools | MCP Server | Exposed Tools**, where it can be enabled or
+   disabled.
+3. Connect an MCP client (e.g. Codex) to that sandbox MCP Server and confirm the tool is
+   discoverable (Codex: `/mcp`).
+
+## Tool contract
+
+### Input
+
+| Field | Type | Meaning |
+|---|---|---|
+| `pathInProject` | string | Java file path relative to the selected IntelliJ project root. |
+| `startLine` | integer | 1-based inclusive start line. |
+| `startColumn` | integer | 1-based inclusive start column. |
+| `endLine` | integer | 1-based line containing the exclusive end position. |
+| `endColumn` | integer | 1-based exclusive end column. |
+| `methodName` | string | New lower-camel-case Java method name. |
+
+Positions are **1-based**, the start is **inclusive**, and the end is **exclusive**: the selected
+text runs from `startLine:startColumn` through (not including) `endLine:endColumn`. Project routing
+is supplied by the MCP host, so the tool does not take a project path argument.
+
+The tool ignores the user's current editor selection — it resolves the supplied range against the
+latest document and PSI state on every call.
+
+### Plan-first usage
+
+Codex drives multi-method decompositions conversationally:
+
+> "This `calculateTotal` method is doing too much. Split it into a discount calculation, a shipping
+> calculation, and the total."
+
+The agent reads the complete method, proposes the child methods, their responsibilities, and the
+extraction order, then **waits for explicit user approval** before changing any source. For each
+approved child method it calls `java_extract_method` once, re-reads the modified file afterwards
+(because line and column positions change after every extraction), and after the final extraction
+runs IDE diagnostics and a build.
+
+### Error codes
+
+Failures return `{"ok": false, "code": "...", "message": "..."}` with one of these stable codes:
+
+| Code | Meaning |
+|---|---|
+| `FILE_NOT_FOUND` | The project-relative path does not resolve to a file. |
+| `OUTSIDE_PROJECT` | The path is absolute or resolves outside the project root. |
+| `NOT_JAVA_FILE` | The target file is not a Java file. |
+| `READ_ONLY` | The target file is read-only. |
+| `INVALID_RANGE` | Positions are out of bounds, or the range is empty or reversed. |
+| `INVALID_METHOD_NAME` | The requested method name is not a valid Java identifier. |
+| `NO_EXTRACTABLE_ELEMENTS` | The range does not resolve to an expression or statement block. |
+| `PREPARE_FAILED` | The native processor refused the selection. |
+| `REFACTORING_FAILED` | An unexpected failure occurred during execution. |
 
 ## Development
 
 ```bash
-./gradlew build           # compile and run tests
-./gradlew test            # run tests only
-./gradlew runIde          # launch a sandbox IntelliJ with the plugin
-./gradlew buildPlugin     # produce a distributable .zip in build/distributions/
+./gradlew test          # run tests only
+./gradlew buildPlugin   # produce a distributable .zip in build/distributions/
+./gradlew runIde        # launch a sandbox IntelliJ with the plugin loaded
 ```
 
-## Architecture
+The Gradle wrapper is committed. Everything needs JDK 21 (IntelliJ 2026.1 runs on JBR 21, and
+Kotlin 2.4's `jvmTarget` tops out at JVM 24).
 
-The plugin is organized around a single extension point: a **`RefactoringHandler`**. Each
-refactoring has its own thin action (e.g. "AI Rename Symbol", "AI Extract Method", "AI
-Introduce Parameter Object") that binds exactly one handler to a *generic, refactoring-agnostic
-orchestrator* (`AbstractAiRefactorAction`). The orchestrator knows nothing about any specific
-refactoring — it runs a fixed pipeline and delegates every refactoring-specific decision to
-its handler:
+## Manual end-to-end acceptance
 
-```
-action/AbstractAiRefactorAction    generic orchestrator (Java guard → resolve → config →
-        │                          prompt → LLM → decode → validate → execute → notify)
-        │
-        ├─ action/AiRenameSymbolAction            binds RenameSymbolHandler
-        ├─ action/AiExtractMethodAction           binds ExtractMethodHandler
-        ├─ action/AiIntroduceParameterObjectAction binds IntroduceParameterObjectHandler
-        │
-        ├─ refactoring/RefactoringHandler          the extension point (one impl = one refactoring)
-        ├─ refactoring/PromptEnvelope              shared, refactoring-agnostic prompt preamble
-        ├─ refactoring/rename/RenameSymbolHandler                      renames a local var/field
-        ├─ refactoring/extractmethod/ExtractMethodHandler             extracts a selection into a method
-        └─ refactoring/introduceparameterobject/IntroduceParameterObjectHandler  folds params into an object
-```
+The acceptance scenario uses the fixture `src/test/testData/mcp/ComplexMethod.java` as a stable
+Java method to analyze. Record pass/fail for each step:
 
-Each refactoring is reached through its **own entry point**, so the AI trigger for each is
-reliable and unambiguous (the user picks the refactoring by choosing the menu item). A
-`RefactoringRegistry` (ordered, first-`resolve()`-wins) also exists, reserved for a future
-auto-analysis entry point that detects a smell and picks the handler — it is not used by the
-manual per-refactoring actions.
-
-A `RefactoringHandler` owns its whole vertical slice:
-
-| Method | Responsibility |
-|---|---|
-| `resolve(file, offset)` | "Do I apply at this caret?" → a `RefactorTarget`, or `null` to pass |
-| `promptContribution(target)` | this refactoring's prompt rules + the JSON shape it expects |
-| `parse(actionJson)` | decode the LLM's action object into a `RefactorOperation` |
-| `validate(op, target, project)` | check the operation before applying it |
-| `execute(op, target, project, settings)` | apply it (via the native refactoring API) and return a success summary |
-
-The orchestrator handles only the shared concerns: the Java-file precondition, the
-`no_action` response, configuration checks, the LLM call, and notifications. The shared
-prompt preamble ("you must not edit code / return only JSON …") lives in `PromptEnvelope`;
-each handler contributes only its own rules.
-
-### Adding a refactoring
-
-1. Write a class implementing `RefactoringHandler` (e.g. under `refactoring/extractconstant/`).
-   Its `id` must equal the `"action"` string it emits/consumes in the LLM JSON.
-2. Add a thin action (e.g. `AiExtractConstantAction`) that binds the handler to
-   `AbstractAiRefactorAction`, mirroring `AiExtractMethodAction`.
-3. Register the action in `META-INF/plugin.xml` (add it to `EditorPopupMenu` + `CodeMenu`).
-
-No change to `AbstractAiRefactorAction` or the LLM/notify layers is required. Reusable building
-blocks (`SymbolResolver`, `ContextCollector`, `NameValidator`, the executors) remain composable
-by a handler — they are not referenced by the orchestrator.
-
-## Configuration
-
-The plugin talks to the LLM through the official **OpenAI Java SDK** (`com.openai:openai-java:4.41.0`), pointed at any OpenAI-compatible endpoint via a custom `baseUrl`.
-
-After installing or running in sandbox, open **Settings → Tools → AI Refactoring** and set:
-- API Base URL — the API root (e.g. `https://api.openai.com`). The `/v1` version segment is appended automatically.
-- API Key
-- Model (e.g. `gpt-4o-mini`)
-- Enable Preview (toggle the rename preview dialog)
-
-## Supported refactorings
-
-- Java files only.
-- **Rename** — a local variable or field under the caret.
-- **Extract Method** — a selection (or the statement at the caret) into a new method.
-- **Introduce Parameter Object** — folds the parameters of the method under the caret (≥ 3 parameters) into a new class.
-- API key is stored in the plugin's settings file (not the OS keychain). Do not commit it.
-- One LLM endpoint shape (OpenAI-compatible chat/completions via the official OpenAI Java SDK).
-
-## Manual sandbox verification (acceptance)
-
-Run `./gradlew runIde` and execute each scenario. Record pass/fail. (Requires Gradle 9.6 + JDK 21; the Gradle wrapper must be generated first — see Development.)
-
-- [ ] Java local variable rename — caret on a local var declaration, AI returns rename, native preview/dialog appears (if Enable Preview is on), variable + usages update.
-- [ ] Java field rename — same flow on a private/public field.
-- [ ] Extract method — select a statement block, "AI Extract Method", AI returns a method name, the block is extracted.
-- [ ] Introduce parameter object — caret in a method with ≥ 3 parameters, "AI Introduce Parameter Object", AI returns a class name, parameters are folded into the new class.
-- [ ] AI returns no_action — notification reads "No refactoring suggested.", source unchanged.
-- [ ] AI returns invalid JSON — notification reads "AI response is invalid.", no refactoring invoked.
-- [ ] Non-Java file (e.g. notes.txt) — notification reads "AI Refactoring MVP only supports Java files.", LLM not called.
-- [ ] Missing API key — notification reads "AI Refactoring is not configured. Set base URL, API key, and model in Settings.", LLM not called.
-- [ ] Slow/unreachable endpoint — the IDE stays responsive (a cancellable "AI analyzing code…" background indicator appears), and a failure shows a balloon rather than freezing.
-
-Each scenario must leave the IDE stable. AI must not edit source outside the native refactoring path.
+- [ ] Launch a sandbox IDEA 2026.1.3 with the plugin.
+- [ ] Confirm `java_extract_method` appears in MCP Server **Exposed Tools**.
+- [ ] Connect Codex to that sandbox MCP Server and confirm `/mcp` discovers the tool.
+- [ ] Ask Codex in natural language to analyze a complex Java method and split it into child methods.
+- [ ] Confirm Codex presents a decomposition plan and waits.
+- [ ] Approve one extraction and confirm the recorded write tool is `java_extract_method`, with no
+      patch, text replacement, or generated whole-file rewrite.
+- [ ] Confirm IntelliJ creates the helper method and updates the original method correctly.
+- [ ] Run IDE diagnostics and the project build successfully.
+- [ ] Confirm one IDEA Undo reverses the extraction.
 
 ## Known limitations
 
-- **Caret must be on the symbol's declaration, not a usage.** The rename handler maps the caret's identifier to its declaration only when the caret sits on the declaration. A caret on a *reference* (a use site) does not resolve to a supported symbol. A production version should resolve references to their target declaration.
-- **API key is stored in plain settings XML**, not the OS keychain (see [Supported refactorings](#supported-refactorings) above).
-
-> Two earlier MVP limitations have since been resolved: the LLM call now runs on a background
-> thread (the UI no longer blocks), and a top-level error guard surfaces unexpected failures as
-> notifications. See the [Roadmap](#roadmap).
+- **Java only.** The tool rejects non-Java files; Kotlin and other languages are out of scope for
+  this release.
+- **One extraction per call.** A multi-method decomposition requires one `java_extract_method` call
+  per child method, with a file re-read in between.
+- **No preview UI.** The tool runs headless; there is no interactive refactoring dialog or preview
+  during an MCP call.
+- **No text fallback.** If the native refactoring refuses a selection, the tool reports the failure
+  and never edits source text directly.
