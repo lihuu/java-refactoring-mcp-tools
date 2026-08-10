@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring.extractmethod
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.CommandProcessor
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -16,25 +17,40 @@ class IntellijExtractMethodExecutor : ExtractMethodExecutor {
         elements: Array<PsiElement>,
         methodName: String,
     ): String {
-        val app = ApplicationManager.getApplication()
         val command = Runnable {
             val processor = PlatformExtractMethodHandler.getProcessor(project, elements, file, false)
-                ?: throw IllegalStateException("Cannot extract the selected code into a method.")
+                ?: throw ExtractMethodPreparationException(
+                    "The selected code cannot be extracted into a method."
+                )
             try {
                 processor.prepare()
             } catch (e: PrepareFailedException) {
-                throw IllegalStateException("Cannot extract: ${e.message}")
+                throw ExtractMethodPreparationException(
+                    "The selected code cannot be extracted: ${e.message}",
+                    e,
+                )
             }
             processor.setMethodName(methodName)
+            // IDEA 2026.1.3: the headless path no longer initializes the parameter datum
+            // (prepareVariablesAndName became @TestOnly and the dialog's apply() is skipped), so
+            // populate it explicitly or generateEmptyMethod() NPEs on a null array.
+            processor.setDataFromInputVariables()
             PlatformExtractMethodHandler.extractMethod(project, processor)
-        }
-        if (app.isUnitTestMode) {
-            CommandProcessor.getInstance().executeCommand(project, command, "AI Extract Method", null)
-        } else {
-            app.invokeAndWait {
-                CommandProcessor.getInstance().executeCommand(project, command, "AI Extract Method", null)
+            FileDocumentManager.getInstance().getDocument(file.virtualFile)?.let {
+                FileDocumentManager.getInstance().saveDocument(it)
             }
         }
+
+        val wrapped = Runnable {
+            CommandProcessor.getInstance().executeCommand(
+                project,
+                command,
+                "MCP Extract Method",
+                null,
+            )
+        }
+        if (ApplicationManager.getApplication().isDispatchThread) wrapped.run()
+        else ApplicationManager.getApplication().invokeAndWait(wrapped)
         return "Extracted method '$methodName'."
     }
 }

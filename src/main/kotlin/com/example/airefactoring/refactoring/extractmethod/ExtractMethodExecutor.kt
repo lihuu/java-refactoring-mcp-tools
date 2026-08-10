@@ -9,3 +9,9 @@ interface ExtractMethodExecutor {
     /** Extract [elements] (from [file]) into a new method named [methodName]; returns a success summary. */
     fun extract(project: Project, file: PsiFile, elements: Array<PsiElement>, methodName: String): String
 }
+
+/** Thrown when the native Extract Method processor refuses to prepare the selection. */
+class ExtractMethodPreparationException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
