@@ -1,45 +1,9 @@
 package com.example.airefactoring.validator
 
-import com.example.airefactoring.resolver.SymbolKind
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiNameHelper
 
 class NameValidator {
-
-    fun validate(
-        newName: String,
-        kind: SymbolKind,
-        currentName: String,
-        project: Project?,
-    ): ValidationResult {
-        val trimmed = newName.trim()
-        if (trimmed.isEmpty()) return ValidationResult.Invalid("New name must not be empty.")
-        if (trimmed == currentName) return ValidationResult.Invalid("New name is the same as the current name.")
-        if (trimmed in JAVA_KEYWORDS) return ValidationResult.Invalid("'$trimmed' is a Java keyword.")
-
-        val identifierOk = if (project != null) {
-            PsiNameHelper.getInstance(project).isIdentifier(trimmed)
-        } else {
-            isPlainJavaIdentifier(trimmed)
-        }
-        if (!identifierOk) return ValidationResult.Invalid("'$trimmed' is not a valid Java identifier.")
-
-        when (kind) {
-            // Methods share the same lowerCamelCase rule as local variables and fields.
-            SymbolKind.LOCAL_VARIABLE, SymbolKind.FIELD, SymbolKind.METHOD -> {
-                if (!trimmed[0].isLowerCase()) {
-                    return ValidationResult.Invalid("'$trimmed' should use lowerCamelCase.")
-                }
-            }
-            SymbolKind.CLASS -> {
-                if (!trimmed[0].isUpperCase()) {
-                    return ValidationResult.Invalid("'$trimmed' should use UpperCamelCase.")
-                }
-            }
-        }
-
-        return ValidationResult.Ok
-    }
 
     fun validateMethodName(newName: String, project: Project?): ValidationResult {
         val trimmed = newName.trim()

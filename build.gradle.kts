@@ -19,7 +19,6 @@ repositories {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    implementation("com.openai:openai-java:4.41.0")
 
     // IntelliJ Platform Gradle Plugin 2.x: platform + bundled plugins + test framework
     // are declared here as dependencies, not in a top-level `intellij {}` block.

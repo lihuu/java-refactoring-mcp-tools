@@ -1,12 +1,11 @@
 <idea-plugin>
     <id>com.example.airefactoring</id>
-    <name>AI Refactoring MVP</name>
+    <name>IntelliJ Refactoring MCP Tools</name>
     <vendor email="dev@example.com" url="https://example.com">example</vendor>
 
     <description><![CDATA[
-        Asks an LLM whether the Java symbol under the caret should be renamed,
-        and delegates the rename to IntelliJ's native refactoring engine.
-        AI never edits source directly.
+        Adds native IntelliJ refactoring operations to the built-in MCP Server.
+        The validation release exposes Java Extract Method.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -14,38 +13,7 @@
     <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="AI Refactoring" displayType="BALLOON"/>
-        <applicationService serviceImplementation="com.example.airefactoring.settings.AiRefactoringSettings"/>
-        <applicationConfigurable
-                parentId="tools"
-                instance="com.example.airefactoring.settings.AiRefactoringConfigurable"
-                id="com.example.airefactoring.settings"
-                displayName="AI Refactoring"/>
         <mcpServer.mcpToolset
                 implementation="com.example.airefactoring.mcp.ExtractMethodMcpToolset"/>
     </extensions>
-
-    <actions>
-        <action id="com.example.airefactoring.AiRenameSymbol"
-                class="com.example.airefactoring.action.AiRenameSymbolAction"
-                text="AI Rename Symbol"
-                description="Ask AI whether to rename the symbol under the caret">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="CodeMenu" anchor="last"/>
-        </action>
-        <action id="com.example.airefactoring.AiExtractMethod"
-                class="com.example.airefactoring.action.AiExtractMethodAction"
-                text="AI Extract Method"
-                description="Ask AI to extract the selected code into a method">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="CodeMenu" anchor="last"/>
-        </action>
-        <action id="com.example.airefactoring.AiIntroduceParameterObject"
-                class="com.example.airefactoring.action.AiIntroduceParameterObjectAction"
-                text="AI Introduce Parameter Object"
-                description="Ask AI to fold the method's parameters into a parameter object">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="CodeMenu" anchor="last"/>
-        </action>
-    </actions>
 </idea-plugin>
