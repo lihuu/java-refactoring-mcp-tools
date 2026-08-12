@@ -8,9 +8,9 @@ import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VfsUtilCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.nio.file.Path
 
 /** Owns the complete request lifecycle for one native Java Extract Method operation. */
 class ExtractMethodOperation(
@@ -45,12 +45,22 @@ class ExtractMethodOperation(
                         selection.elements,
                         trimmedName,
                     )
-                    val baseDir = project.baseDir
-                    val filePath = baseDir
-                        ?.let { VfsUtilCore.getRelativePath(selection.file.virtualFile, it) }
-                        ?: selection.file.virtualFile.path
+                    val basePath = project.basePath ?: ""
+                    val filePath = if (basePath.isEmpty()) {
+                        selection.file.virtualFile.path
+                    } else {
+                        Path.of(basePath)
+                            .toAbsolutePath()
+                            .normalize()
+                            .relativize(
+                                Path.of(selection.file.virtualFile.path)
+                                    .toAbsolutePath()
+                                    .normalize(),
+                            )
+                            .toString()
+                    }
                     McpRefactoringResult.extractMethodSuccess(
-                        projectBasePath = baseDir?.path ?: "",
+                        projectBasePath = basePath,
                         filePath = filePath,
                         methodName = trimmedName,
                         summary = summary,

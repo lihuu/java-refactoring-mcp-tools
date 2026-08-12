@@ -2,6 +2,7 @@ package com.example.airefactoring.mcp
 
 import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperation
+import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -11,6 +12,7 @@ import kotlinx.coroutines.currentCoroutineContext
 /** MCP adapter for this plugin's native Java refactoring operations. */
 class JavaRefactorToolset(
     private val extractMethodOperation: ExtractMethodOperation = ExtractMethodOperation(),
+    private val introduceVariableOperation: IntroduceVariableOperation = IntroduceVariableOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -29,6 +31,22 @@ class JavaRefactorToolset(
         methodName,
     )
 
+    @McpTool
+    @McpDescription(INTRODUCE_VARIABLE_DESCRIPTION)
+    suspend fun java_introduce_variable(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line") startLine: Int,
+        @McpDescription("1-based inclusive start column") startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position") endLine: Int,
+        @McpDescription("1-based exclusive end column") endColumn: Int,
+        @McpDescription("Agent-selected preferred Java local-variable name") preferredVariableName: String,
+    ): String = introduceVariableOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+        preferredVariableName,
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -42,5 +60,18 @@ class JavaRefactorToolset(
                 "Java file path and a 1-based source range (start inclusive, end exclusive). The " +
                 "method name must be a valid lower-camel-case Java identifier. Returns a JSON " +
                 "object with ok=true on success, or ok=false with a stable error code on failure."
+
+        const val INTRODUCE_VARIABLE_DESCRIPTION =
+            "Introduces one exact Java expression as one local variable using IntelliJ's native " +
+                "Introduce Variable refactoring. Use it after reading the containing method, " +
+                "choosing a semantic preferred variable name from the expression and context, " +
+                "presenting the change, and waiting for user approval. Only the selected occurrence " +
+                "is replaced; IntelliJ writes an explicit non-final type and may make a conflicting " +
+                "valid name unique. Re-read the file after success and use the returned " +
+                "actualVariableName for later work. Never use direct text edits, patches, or PSI " +
+                "mutation as a fallback when this native refactoring rejects the expression. The " +
+                "target uses a project-relative Java path and 1-based source range with an inclusive " +
+                "start and exclusive end. Returns JSON with ok=true on success or a stable error " +
+                "code on failure."
     }
 }

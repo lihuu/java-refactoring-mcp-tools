@@ -4,8 +4,8 @@
     <vendor email="dev@example.com" url="https://example.com">example</vendor>
 
     <description><![CDATA[
-        Adds native IntelliJ refactoring operations to the built-in MCP Server.
-        The validation release exposes Java Extract Method.
+        Adds native Java refactoring operations to the built-in MCP Server.
+        The current release exposes Java Extract Method and Introduce Variable.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

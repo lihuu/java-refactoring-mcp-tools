@@ -21,6 +21,7 @@ enum class McpRefactoringErrorCode {
 }
 
 @Serializable
+@ConsistentCopyVisibility
 data class McpRefactoringResult private constructor(
     val ok: Boolean,
     val operation: String? = null,
