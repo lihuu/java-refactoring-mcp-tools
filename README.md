@@ -8,7 +8,8 @@ The validation release exposes exactly one tool: **`java_extract_method`**.
 
 ## Requirements
 
-- JDK 21
+- JDK 25 (toolchain) — the plugin compiles with JDK 25 but targets Java 21 bytecode, so it still
+  runs inside IntelliJ IDEA 2026.1.3 (JBR 21).
 - IntelliJ IDEA 2026.1.3 (build 261) — the plugin is built against the platform 2026.1.3 and
   depends on the bundled `com.intellij.mcpServer` and `com.intellij.java` plugins.
 
@@ -101,8 +102,11 @@ Failures return `{"ok": false, "code": "...", "message": "..."}` with one of the
 ./gradlew runIde        # launch a sandbox IntelliJ with the plugin loaded
 ```
 
-The Gradle wrapper is committed. Everything needs JDK 21 (IntelliJ 2026.1 runs on JBR 21, and
-Kotlin 2.4's `jvmTarget` tops out at JVM 24).
+The Gradle wrapper is committed. The toolchain is JDK 25 (set `javaVersion` in
+`gradle.properties`), but the bytecode target stays at Java 21: IntelliJ 2026.1 runs on JBR 21,
+and Kotlin 2.4's `jvmTarget` tops out at JVM 24, so JDK 25 bytecode would neither compile
+(jvmTarget ceiling) nor load in the IDE. The `jvmTarget`/Java `release` are pinned to 21 in
+`build.gradle.kts`.
 
 ## Manual end-to-end acceptance
 

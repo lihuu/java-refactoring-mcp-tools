@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew runIde        # launch sandbox IntelliJ with the plugin loaded
 ```
 
-Tests use JUnit 4 (`LightJavaCodeInsightFixtureTestCase`). The Gradle wrapper is committed; everything needs JDK 21 (IntelliJ 2026.1 runs on JBR 21, and Kotlin 2.4's `jvmTarget` tops out at JVM 24).
+Tests use JUnit 4 (`LightJavaCodeInsightFixtureTestCase`). The Gradle wrapper is committed. The toolchain is JDK 25 (set `javaVersion` in `gradle.properties`), but the bytecode target stays at Java 21: IntelliJ 2026.1 runs on JBR 21, and Kotlin 2.4's `jvmTarget` tops out at JVM 24, so JDK 25 bytecode would neither compile (jvmTarget ceiling) nor load in the IDE. The `jvmTarget`/Java `release` are pinned to 21 in `build.gradle.kts`.
 
 ## Architecture
 
