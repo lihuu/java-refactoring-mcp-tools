@@ -57,6 +57,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
         val obj = Json.parseToJsonElement(json).jsonObject
         assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
         assertEquals("printValue", obj.getValue("methodName").jsonPrimitive.content)
+        assertEquals(project.basePath, obj.getValue("projectBasePath").jsonPrimitive.content)
     }
 
     fun testInvalidMethodNameReturnsInvalidMethodNameWithoutInvokingExecutor() {

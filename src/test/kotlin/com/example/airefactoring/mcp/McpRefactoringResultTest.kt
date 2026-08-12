@@ -10,6 +10,7 @@ class McpRefactoringResultTest : TestCase() {
     fun testSuccessContainsOnlySuccessFields() {
         val obj = Json.parseToJsonElement(
             McpRefactoringResult.success(
+                projectBasePath = "/home/example",
                 filePath = "src/main/java/example/Calc.java",
                 methodName = "calculateTotal",
                 summary = "Extracted method 'calculateTotal'.",
@@ -21,6 +22,30 @@ class McpRefactoringResultTest : TestCase() {
         assertEquals("calculateTotal", obj.getValue("methodName").jsonPrimitive.content)
         assertFalse(obj.containsKey("code"))
         assertFalse(obj.containsKey("message"))
+    }
+
+    fun testSuccessEchoesProjectBasePath() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.success(
+                projectBasePath = "/home/example",
+                filePath = "src/main/java/example/Calc.java",
+                methodName = "calculateTotal",
+                summary = "Extracted method 'calculateTotal'.",
+            ).toJson()
+        ).jsonObject
+
+        assertEquals("/home/example", obj.getValue("projectBasePath").jsonPrimitive.content)
+    }
+
+    fun testFailureOmitsProjectBasePath() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.failure(
+                McpRefactoringErrorCode.INVALID_RANGE,
+                "The source range is empty.",
+            ).toJson()
+        ).jsonObject
+
+        assertFalse(obj.containsKey("projectBasePath"))
     }
 
     fun testFailureUsesStableCodeAndOmitsSuccessFields() {

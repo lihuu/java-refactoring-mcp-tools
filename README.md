@@ -65,6 +65,35 @@ is supplied by the MCP host, so the tool does not take a project path argument.
 The tool ignores the user's current editor selection — it resolves the supplied range against the
 latest document and PSI state on every call.
 
+### Success response
+
+On success the tool returns a JSON envelope that echoes which project the refactoring ran in, so a
+multi-project setup stays auditable regardless of which MCP client made the call:
+
+```json
+{
+  "ok": true,
+  "operation": "java_extract_method",
+  "filePath": "src/main/java/example/Calc.java",
+  "projectBasePath": "/home/example",
+  "methodName": "calculateTotal",
+  "summary": "Extracted method 'calculateTotal'."
+}
+```
+
+- `filePath` is the edited file path relative to the target project root.
+- `projectBasePath` is the absolute path of the IntelliJ project that hosted the refactoring — use it
+  to confirm which project was actually modified when multiple projects are open in the same IDE.
+
+### Project routing
+
+Project routing is handled by the MCP host, not by the plugin. The host resolves the target project
+from the client-supplied `projectPath` (injected into every tool's schema as implicit metadata); if
+none is supplied and exactly one project is open, that project is used. With multiple projects open
+and no matching `projectPath`, the host rejects the call rather than silently acting on a random
+project. The plugin's success envelope echoes the resolved project via `projectBasePath` so the
+actual target is always visible to the caller.
+
 ### Plan-first usage
 
 Codex drives multi-method decompositions conversationally:

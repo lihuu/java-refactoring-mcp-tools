@@ -22,6 +22,7 @@ data class McpRefactoringResult private constructor(
     val ok: Boolean,
     val operation: String? = null,
     val filePath: String? = null,
+    val projectBasePath: String? = null,
     val methodName: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
@@ -32,11 +33,12 @@ data class McpRefactoringResult private constructor(
     companion object {
         private val JSON = Json { encodeDefaults = false }
 
-        fun success(filePath: String, methodName: String, summary: String) =
+        fun success(projectBasePath: String, filePath: String, methodName: String, summary: String) =
             McpRefactoringResult(
                 ok = true,
                 operation = "java_extract_method",
                 filePath = filePath,
+                projectBasePath = projectBasePath,
                 methodName = methodName,
                 summary = summary,
             )

@@ -79,10 +79,18 @@ class ExtractMethodMcpToolset(
                 is SelectionResolution.Success -> {
                     val selection = resolution.selection
                     val summary = executor.extract(project, selection.file, selection.elements, trimmedName)
-                    val filePath = project.baseDir
+                    val baseDir = project.baseDir
+                    val filePath = baseDir
                         ?.let { VfsUtilCore.getRelativePath(selection.file.virtualFile, it) }
                         ?: selection.file.virtualFile.path
-                    McpRefactoringResult.success(filePath, trimmedName, summary).toJson()
+                    McpRefactoringResult
+                        .success(
+                            projectBasePath = baseDir?.path ?: "",
+                            filePath = filePath,
+                            methodName = trimmedName,
+                            summary = summary,
+                        )
+                        .toJson()
                 }
             }
         } catch (e: ProcessCanceledException) {
