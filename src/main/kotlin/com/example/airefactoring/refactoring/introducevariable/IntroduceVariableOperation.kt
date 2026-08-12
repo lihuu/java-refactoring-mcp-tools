@@ -9,6 +9,7 @@ import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 
 /** Owns validation, current-PSI resolution, native execution, and JSON mapping for one request. */
 class IntroduceVariableOperation(
@@ -82,6 +83,8 @@ class IntroduceVariableOperation(
                     ).toJson()
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: IntroduceVariablePreparationException) {

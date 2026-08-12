@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -181,6 +182,22 @@ class IntroduceVariableOperationTest : LightJavaCodeInsightFixtureTestCase() {
             fail("expected ProcessCanceledException")
         } catch (expected: ProcessCanceledException) {
             // Cancellation must remain visible to IntelliJ and the MCP host.
+        }
+    }
+
+    fun testCoroutineCancellationEscapes() {
+        val range = validRange("OperationCoroutineCancel.java")
+        val operation = IntroduceVariableOperation(
+            executor = ThrowingExecutor(CancellationException("cancelled")),
+        )
+
+        try {
+            runOperation {
+                operation.execute(project, "OperationCoroutineCancel.java", range, "sum")
+            }
+            fail("expected CancellationException")
+        } catch (expected: CancellationException) {
+            // Coroutine cancellation must remain visible to IntelliJ and the MCP host.
         }
     }
 
