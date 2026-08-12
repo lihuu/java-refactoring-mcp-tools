@@ -9,7 +9,7 @@ data class IntroduceVariableExecutionResult(
 )
 
 interface IntroduceVariableExecutor {
-    fun introduce(
+    suspend fun introduce(
         project: Project,
         selection: IntroduceVariableSelection,
         preferredVariableName: String,

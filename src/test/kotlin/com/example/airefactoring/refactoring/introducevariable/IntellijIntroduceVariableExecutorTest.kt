@@ -19,9 +19,14 @@ import com.intellij.psi.PsiModifier
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiTypes
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.testFramework.dispatchAllEventsInIdeEventQueue
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCase() {
 
@@ -35,7 +40,7 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
             "10 + 20",
         )
 
-        val result = executor.introduce(project, selection, "sum")
+        val result = runExecutor { executor.introduce(project, selection, "sum") }
         PsiDocumentManager.getInstance(project).commitDocument(selection.document)
 
         assertEquals("sum", result.actualVariableName)
@@ -58,7 +63,7 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
             "10 + 20",
         )
 
-        val result = executor.introduce(project, selection, "sum")
+        val result = runExecutor { executor.introduce(project, selection, "sum") }
         PsiDocumentManager.getInstance(project).commitDocument(selection.document)
 
         assertTrue(result.actualVariableName.startsWith("sum"))
@@ -78,7 +83,7 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
         val original = selection.file.text
 
         try {
-            executor.introduce(project, selection, "printed")
+            runExecutor { executor.introduce(project, selection, "printed") }
             fail("expected native preflight refusal")
         } catch (e: IntroduceVariablePreparationException) {
             assertTrue(e.message!!.isNotBlank())
@@ -95,7 +100,7 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
         val otherDocument = createAndDirtyRealJavaFile("OtherDirty.java")
         assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(otherDocument))
 
-        executor.introduce(project, selection, "sum")
+        runExecutor { executor.introduce(project, selection, "sum") }
 
         assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(otherDocument))
     }
@@ -108,7 +113,7 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
         )
         val original = selection.document.text
 
-        executor.introduce(project, selection, "sum")
+        runExecutor { executor.introduce(project, selection, "sum") }
 
         val undoManager = UndoManager.getInstance(project)
         assertTrue(undoManager.isUndoAvailable(null))
@@ -186,5 +191,24 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
         val (startLine, startColumn) = position(startOffset)
         val (endLine, endColumn) = position(endOffset)
         return SourceRange(startLine, startColumn, endLine, endColumn)
+    }
+
+    private fun <T> runExecutor(block: suspend () -> T): T {
+        val pool = Executors.newSingleThreadExecutor()
+        return try {
+            val future = pool.submit<T> { runBlocking { block() } }
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+            while (System.nanoTime() < deadline && !future.isDone) {
+                dispatchAllEventsInIdeEventQueue()
+                Thread.sleep(1)
+            }
+            try {
+                future.get(1, TimeUnit.SECONDS)
+            } catch (e: ExecutionException) {
+                throw e.cause ?: e
+            }
+        } finally {
+            pool.shutdownNow()
+        }
     }
 }

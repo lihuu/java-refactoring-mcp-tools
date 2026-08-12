@@ -1,6 +1,10 @@
 package com.example.airefactoring.refactoring.introducevariable
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -95,6 +99,49 @@ class IntroduceVariableOperationTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals(0, spy.times)
     }
 
+    fun testInvokesNativeExecutorFromBackgroundThread() {
+        val range = validRange("OperationExecutorThread.java")
+        val spy = SpyExecutor()
+
+        runOperation {
+            IntroduceVariableOperation(executor = spy).execute(
+                project,
+                "OperationExecutorThread.java",
+                range,
+                "sum",
+            )
+        }
+
+        assertFalse("Native executor preparation must start off EDT", spy.wasInvokedOnEdt)
+    }
+
+    fun testResolvesLatestUnsavedDocumentStateFromBackgroundReadAction() {
+        val fileName = "OperationUnsaved.java"
+        val target = Path.of(project.basePath!!, fileName)
+        Files.writeString(target, "class OperationUnsaved { int total() { return 1; } }")
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(target.toString())!!
+        val document = FileDocumentManager.getInstance().getDocument(virtualFile)!!
+        val currentSource = "class OperationUnsaved { int total() { return 10 + 20; } }"
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.setText(currentSource)
+        }
+        val startOffset = currentSource.indexOf("10 + 20")
+        val range = sourceRange(document, startOffset, startOffset + "10 + 20".length)
+        val spy = SpyExecutor()
+
+        val json = runOperation {
+            IntroduceVariableOperation(executor = spy).execute(
+                project,
+                fileName,
+                range,
+                "sum",
+            )
+        }
+
+        assertTrue(Json.parseToJsonElement(json).jsonObject.getValue("ok").jsonPrimitive.boolean)
+        assertEquals(1, spy.times)
+    }
+
     fun testPreparationExceptionMapsToPrepareFailed() {
         val range = validRange("OperationPrepare.java")
         val operation = IntroduceVariableOperation(
@@ -159,18 +206,25 @@ class IntroduceVariableOperationTest : LightJavaCodeInsightFixtureTestCase() {
     private fun configureMarkedFile(fileName: String, markedText: String): SourceRange {
         myFixture.configureByText(fileName, markedText)
         val document = myFixture.editor.document
+        val target = Path.of(project.basePath!!, fileName)
+        Files.createDirectories(target.parent)
+        Files.writeString(target, document.text)
+        LocalFileSystem.getInstance().refreshAndFindFileByPath(target.toString())!!
+        return sourceRange(
+            document,
+            myFixture.editor.selectionModel.selectionStart,
+            myFixture.editor.selectionModel.selectionEnd,
+        )
+    }
 
+    private fun sourceRange(document: Document, start: Int, end: Int): SourceRange {
         fun position(offset: Int): Pair<Int, Int> {
             val line = document.getLineNumber(offset)
             return (line + 1) to (offset - document.getLineStartOffset(line) + 1)
         }
 
-        val (startLine, startColumn) = position(myFixture.editor.selectionModel.selectionStart)
-        val (endLine, endColumn) = position(myFixture.editor.selectionModel.selectionEnd)
-        val target = Path.of(project.basePath!!, fileName)
-        Files.createDirectories(target.parent)
-        Files.writeString(target, document.text)
-        LocalFileSystem.getInstance().refreshAndFindFileByPath(target.toString())!!
+        val (startLine, startColumn) = position(start)
+        val (endLine, endColumn) = position(end)
         return SourceRange(startLine, startColumn, endLine, endColumn)
     }
 
@@ -193,13 +247,15 @@ class IntroduceVariableOperationTest : LightJavaCodeInsightFixtureTestCase() {
         ),
     ) : IntroduceVariableExecutor {
         var times = 0
+        var wasInvokedOnEdt = false
 
-        override fun introduce(
+        override suspend fun introduce(
             project: Project,
             selection: IntroduceVariableSelection,
             preferredVariableName: String,
         ): IntroduceVariableExecutionResult {
             times++
+            wasInvokedOnEdt = ApplicationManager.getApplication().isDispatchThread
             return result
         }
     }
@@ -207,7 +263,7 @@ class IntroduceVariableOperationTest : LightJavaCodeInsightFixtureTestCase() {
     private class ThrowingExecutor(
         private val throwable: Throwable,
     ) : IntroduceVariableExecutor {
-        override fun introduce(
+        override suspend fun introduce(
             project: Project,
             selection: IntroduceVariableSelection,
             preferredVariableName: String,
