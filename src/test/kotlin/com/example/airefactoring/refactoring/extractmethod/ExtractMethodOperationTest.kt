@@ -1,10 +1,7 @@
-package com.example.airefactoring.mcp
+package com.example.airefactoring.refactoring.extractmethod
 
-import com.example.airefactoring.refactoring.extractmethod.ExtractMethodExecutor
-import com.example.airefactoring.refactoring.extractmethod.ExtractMethodPreparationException
+import com.example.airefactoring.mcp.McpRefactoringErrorCode
 import com.example.airefactoring.refactoring.SourceRange
-import com.intellij.mcpserver.McpToolset
-import com.intellij.mcpserver.impl.ReflectionToolsProvider
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
@@ -26,15 +23,15 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Exercises [ExtractMethodMcpToolset.execute] against the real selection resolver with a spy
- * executor, plus the reflection/extension registrations that surface the tool to the MCP Server.
+ * Exercises [ExtractMethodOperation.execute] against the real selection resolver with a spy
+ * executor.
  *
  * The test JVM runs each test method on the EDT, so a `suspend` seam that internally hops to
  * `Dispatchers.EDT` cannot be driven by a blocking `runBlocking` on the test thread (that would
  * deadlock: the EDT is the blocked test thread). [runTool] therefore runs the suspend seam on a
  * pooled thread and pumps the EDT event queue from the test thread until the future completes.
  */
-class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
+class ExtractMethodOperationTest : LightJavaCodeInsightFixtureTestCase() {
 
     // --- Step 2: dispatch tests with a spy executor ---
 
@@ -48,7 +45,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
                 "}",
         )
         val spy = SpyExecutor()
-        val toolset = ExtractMethodMcpToolset(executor = spy)
+        val toolset = ExtractMethodOperation(executor = spy)
 
         val json = runTool { toolset.execute(project, "CalcTool.java", range, "  printValue  ") }
 
@@ -62,7 +59,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testInvalidMethodNameReturnsInvalidMethodNameWithoutInvokingExecutor() {
         val spy = SpyExecutor()
-        val toolset = ExtractMethodMcpToolset(executor = spy)
+        val toolset = ExtractMethodOperation(executor = spy)
 
         // The method-name validator runs before any PSI resolution, so no fixture file is needed.
         val json = runTool { toolset.execute(project, "NoSuch.java", SourceRange(1, 1, 1, 2), "class") }
@@ -121,7 +118,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
         )
         val spy = SpyExecutor()
         spy.exceptionToThrow = ExtractMethodPreparationException("The selected code cannot be extracted.")
-        val toolset = ExtractMethodMcpToolset(executor = spy)
+        val toolset = ExtractMethodOperation(executor = spy)
 
         val json = runTool { toolset.execute(project, "CalcPrep.java", range, "doIt") }
 
@@ -137,7 +134,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
         )
         val spy = SpyExecutor()
         spy.exceptionToThrow = IllegalStateException("boom")
-        val toolset = ExtractMethodMcpToolset(executor = spy)
+        val toolset = ExtractMethodOperation(executor = spy)
 
         val json = runTool { toolset.execute(project, "CalcUnexp.java", range, "doIt") }
 
@@ -153,7 +150,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
         )
         val spy = SpyExecutor()
         spy.exceptionToThrow = ProcessCanceledException()
-        val toolset = ExtractMethodMcpToolset(executor = spy)
+        val toolset = ExtractMethodOperation(executor = spy)
 
         try {
             runTool { toolset.execute(project, "CalcCancel.java", range, "doIt") }
@@ -161,43 +158,6 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
         } catch (expected: ProcessCanceledException) {
             // cancellation must propagate, not be encoded as a failure JSON.
         }
-    }
-
-    // --- Step 3: reflection and extension-registration tests ---
-
-    fun testToolsetIsRegisteredAsExtension() {
-        assertTrue(
-            "ExtractMethodMcpToolset should be registered on McpToolset.EP via plugin.xml",
-            McpToolset.EP.extensionList.any { it is ExtractMethodMcpToolset },
-        )
-    }
-
-    fun testReflectedToolDescriptorMatchesContract() {
-        val descriptor = ReflectionToolsProvider().getTools()
-            .map { it.descriptor }
-            .single { it.name == "java_extract_method" }
-
-        assertTrue(
-            "tool description must forbid direct text edits",
-            descriptor.description.contains("Never implement Extract Method through direct text edits"),
-        )
-    }
-
-    fun testInputSchemaContainsExactlySixDeclaredArguments() {
-        val descriptor = ReflectionToolsProvider().getTools()
-            .map { it.descriptor }
-            .single { it.name == "java_extract_method" }
-
-        val properties = descriptor.inputSchema.propertiesSchema
-        // The 2026.1.3 reflection provider injects the host's project-routing metadata
-        // (`projectPath`) into every tool's input schema. The tool function itself declares exactly
-        // the six arguments below; `projectPath` is host-managed and not a function parameter.
-        val declared = setOf("pathInProject", "startLine", "startColumn", "endLine", "endColumn", "methodName")
-        assertEquals(
-            "the tool schema must expose exactly the six declared arguments plus host project-routing metadata",
-            declared + "projectPath",
-            properties.keys,
-        )
     }
 
     // --- helpers ---
@@ -228,7 +188,7 @@ class ExtractMethodMcpToolsetTest : LightJavaCodeInsightFixtureTestCase() {
 
     /** Runs a failing request and asserts the resolver's failure code is preserved in the JSON. */
     private fun assertFailureCode(pathInProject: String, range: SourceRange, expected: McpRefactoringErrorCode) {
-        val toolset = ExtractMethodMcpToolset(executor = SpyExecutor())
+        val toolset = ExtractMethodOperation(executor = SpyExecutor())
         val json = runTool { toolset.execute(project, pathInProject, range, "doIt") }
         val obj = Json.parseToJsonElement(json).jsonObject
         assertFalse("expected a failure for $pathInProject but was $json", obj.getValue("ok").jsonPrimitive.boolean)

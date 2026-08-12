@@ -14,6 +14,6 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset
-                implementation="com.example.airefactoring.mcp.ExtractMethodMcpToolset"/>
+                implementation="com.example.airefactoring.mcp.JavaRefactorToolset"/>
     </extensions>
 </idea-plugin>
