@@ -2,8 +2,26 @@ package com.example.airefactoring.validator
 
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiNameHelper
+import javax.lang.model.SourceVersion
 
 class NameValidator {
+
+    fun validateVariableName(newName: String, project: Project?): ValidationResult {
+        if (newName.isEmpty()) return ValidationResult.Invalid("Variable name must not be empty.")
+        if (newName != newName.trim()) {
+            return ValidationResult.Invalid("Variable name must not contain surrounding whitespace.")
+        }
+        val identifierOk = if (project != null) {
+            PsiNameHelper.getInstance(project).isIdentifier(newName)
+        } else {
+            SourceVersion.isIdentifier(newName) && !SourceVersion.isKeyword(newName)
+        }
+        return if (identifierOk) {
+            ValidationResult.Ok
+        } else {
+            ValidationResult.Invalid("'$newName' is not a valid Java identifier.")
+        }
+    }
 
     fun validateMethodName(newName: String, project: Project?): ValidationResult {
         val trimmed = newName.trim()

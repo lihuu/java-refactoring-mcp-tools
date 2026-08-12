@@ -7,9 +7,45 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class McpRefactoringResultTest : TestCase() {
+    fun testIntroduceVariableSuccessContainsRequestedActualAndTypeFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.introduceVariableSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/Calculator.java",
+                requestedVariableName = "totalPrice",
+                actualVariableName = "totalPrice1",
+                variableType = "java.math.BigDecimal",
+                summary = "Introduced local variable 'totalPrice1'.",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_introduce_variable", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("totalPrice", obj.getValue("requestedVariableName").jsonPrimitive.content)
+        assertEquals("totalPrice1", obj.getValue("actualVariableName").jsonPrimitive.content)
+        assertEquals("java.math.BigDecimal", obj.getValue("variableType").jsonPrimitive.content)
+        assertFalse(obj.containsKey("methodName"))
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testExtractMethodSuccessOmitsIntroduceVariableFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.extractMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "Calc.java",
+                methodName = "calculateTotal",
+                summary = "Extracted method 'calculateTotal'.",
+            ).toJson()
+        ).jsonObject
+
+        assertFalse(obj.containsKey("requestedVariableName"))
+        assertFalse(obj.containsKey("actualVariableName"))
+        assertFalse(obj.containsKey("variableType"))
+    }
+
     fun testSuccessContainsOnlySuccessFields() {
         val obj = Json.parseToJsonElement(
-            McpRefactoringResult.success(
+            McpRefactoringResult.extractMethodSuccess(
                 projectBasePath = "/home/example",
                 filePath = "src/main/java/example/Calc.java",
                 methodName = "calculateTotal",
@@ -26,7 +62,7 @@ class McpRefactoringResultTest : TestCase() {
 
     fun testSuccessEchoesProjectBasePath() {
         val obj = Json.parseToJsonElement(
-            McpRefactoringResult.success(
+            McpRefactoringResult.extractMethodSuccess(
                 projectBasePath = "/home/example",
                 filePath = "src/main/java/example/Calc.java",
                 methodName = "calculateTotal",

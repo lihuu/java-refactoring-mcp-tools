@@ -84,7 +84,7 @@ class ExtractMethodMcpToolset(
                         ?.let { VfsUtilCore.getRelativePath(selection.file.virtualFile, it) }
                         ?: selection.file.virtualFile.path
                     McpRefactoringResult
-                        .success(
+                        .extractMethodSuccess(
                             projectBasePath = baseDir?.path ?: "",
                             filePath = filePath,
                             methodName = trimmedName,

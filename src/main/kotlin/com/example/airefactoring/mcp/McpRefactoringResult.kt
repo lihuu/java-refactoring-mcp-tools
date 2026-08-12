@@ -12,7 +12,10 @@ enum class McpRefactoringErrorCode {
     READ_ONLY,
     INVALID_RANGE,
     INVALID_METHOD_NAME,
+    INVALID_VARIABLE_NAME,
     NO_EXTRACTABLE_ELEMENTS,
+    NO_INTRODUCIBLE_EXPRESSION,
+    UNSUPPORTED_EXPRESSION,
     PREPARE_FAILED,
     REFACTORING_FAILED,
 }
@@ -24,6 +27,9 @@ data class McpRefactoringResult private constructor(
     val filePath: String? = null,
     val projectBasePath: String? = null,
     val methodName: String? = null,
+    val requestedVariableName: String? = null,
+    val actualVariableName: String? = null,
+    val variableType: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -33,7 +39,12 @@ data class McpRefactoringResult private constructor(
     companion object {
         private val JSON = Json { encodeDefaults = false }
 
-        fun success(projectBasePath: String, filePath: String, methodName: String, summary: String) =
+        fun extractMethodSuccess(
+            projectBasePath: String,
+            filePath: String,
+            methodName: String,
+            summary: String,
+        ) =
             McpRefactoringResult(
                 ok = true,
                 operation = "java_extract_method",
@@ -42,6 +53,24 @@ data class McpRefactoringResult private constructor(
                 methodName = methodName,
                 summary = summary,
             )
+
+        fun introduceVariableSuccess(
+            projectBasePath: String,
+            filePath: String,
+            requestedVariableName: String,
+            actualVariableName: String,
+            variableType: String,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_introduce_variable",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            requestedVariableName = requestedVariableName,
+            actualVariableName = actualVariableName,
+            variableType = variableType,
+            summary = summary,
+        )
 
         fun failure(code: McpRefactoringErrorCode, message: String) =
             McpRefactoringResult(ok = false, code = code, message = message)
