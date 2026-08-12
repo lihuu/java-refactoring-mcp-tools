@@ -35,6 +35,55 @@ class JavaSourceTargetResolverTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals("RangeOk.java", target.file.name)
     }
 
+    fun testResolvesOneBasedPointFromCurrentDocument() {
+        val file = mirrorRealFile(
+            "PointOk.java",
+            "class PointOk {\n    int total() {\n\n        return 1;\n    }\n}",
+        )
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        val methodNameOffset = document.text.indexOf("total")
+        val line = document.getLineNumber(methodNameOffset)
+
+        val result = resolver.resolvePoint(
+            project,
+            "PointOk.java",
+            line + 1,
+            methodNameOffset - document.getLineStartOffset(line) + 1,
+        )
+
+        assertTrue(result is JavaSourcePointTargetResolution.Success)
+        val target = (result as JavaSourcePointTargetResolution.Success).target
+        assertEquals(methodNameOffset, target.offset)
+        assertEquals("PointOk.java", target.file.name)
+    }
+
+    fun testResolvesColumnOneOnBlankLine() {
+        val file = mirrorRealFile(
+            "BlankPoint.java",
+            "class BlankPoint {\n    void run() {\n\n    }\n}",
+        )
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+
+        val result = resolver.resolvePoint(project, "BlankPoint.java", 3, 1)
+
+        assertTrue(result is JavaSourcePointTargetResolution.Success)
+        val target = (result as JavaSourcePointTargetResolution.Success).target
+        assertEquals(document.getLineStartOffset(2), target.offset)
+    }
+
+    fun testPointResolutionRejectsInvalidCoordinates() {
+        mirrorRealFile("BadPoint.java", "class BadPoint {}")
+
+        listOf(0 to 1, 1 to 0, 99 to 1, 1 to 999).forEach { (line, column) ->
+            val result = resolver.resolvePoint(project, "BadPoint.java", line, column)
+            assertTrue(result is JavaSourcePointTargetResolution.Failure)
+            assertEquals(
+                McpRefactoringErrorCode.INVALID_RANGE,
+                (result as JavaSourcePointTargetResolution.Failure).code,
+            )
+        }
+    }
+
     fun testRejectsAbsoluteAndParentTraversalPaths() {
         requireFailure(
             resolver.resolve(project, "/tmp/Outside.java", SourceRange(1, 1, 1, 2)),
