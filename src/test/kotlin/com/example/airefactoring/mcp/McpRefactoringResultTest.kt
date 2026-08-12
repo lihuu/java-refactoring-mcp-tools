@@ -3,6 +3,8 @@ package com.example.airefactoring.mcp
 import junit.framework.TestCase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -26,6 +28,7 @@ class McpRefactoringResultTest : TestCase() {
         assertEquals("java.math.BigDecimal", obj.getValue("variableType").jsonPrimitive.content)
         assertFalse(obj.containsKey("methodName"))
         assertFalse(obj.containsKey("code"))
+        assertChangeSignatureFieldsAbsent(obj.keys)
     }
 
     fun testExtractMethodSuccessOmitsIntroduceVariableFields() {
@@ -41,6 +44,41 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("requestedVariableName"))
         assertFalse(obj.containsKey("actualVariableName"))
         assertFalse(obj.containsKey("variableType"))
+        assertChangeSignatureFieldsAbsent(obj.keys)
+    }
+
+    fun testChangeSignatureSuccessContainsParameterAndAffectedUsageFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.changeSignatureAddParameterSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/GreetingService.java",
+                methodName = "greet",
+                parameterName = "punctuation",
+                parameterType = "java.lang.String",
+                parameterPosition = 2,
+                defaultCallSiteExpression = "\"!\"",
+                updatedCallSiteCount = 2,
+                affectedFiles = listOf("Caller.java", "GreetingService.java"),
+                summary = "Added parameter 'punctuation' at position 2 and updated 2 call sites.",
+            ).toJson(),
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals(
+            "java_change_signature_add_parameter",
+            obj.getValue("operation").jsonPrimitive.content,
+        )
+        assertEquals("punctuation", obj.getValue("parameterName").jsonPrimitive.content)
+        assertEquals("java.lang.String", obj.getValue("parameterType").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("parameterPosition").jsonPrimitive.int)
+        assertEquals("\"!\"", obj.getValue("defaultCallSiteExpression").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("updatedCallSiteCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("Caller.java", "GreetingService.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(obj.containsKey("requestedVariableName"))
+        assertFalse(obj.containsKey("code"))
     }
 
     fun testSuccessContainsOnlySuccessFields() {
@@ -105,5 +143,14 @@ class McpRefactoringResultTest : TestCase() {
             ).jsonObject
             assertEquals(code.name, obj.getValue("code").jsonPrimitive.content)
         }
+    }
+
+    private fun assertChangeSignatureFieldsAbsent(keys: Set<String>) {
+        assertFalse(keys.contains("parameterName"))
+        assertFalse(keys.contains("parameterType"))
+        assertFalse(keys.contains("parameterPosition"))
+        assertFalse(keys.contains("defaultCallSiteExpression"))
+        assertFalse(keys.contains("updatedCallSiteCount"))
+        assertFalse(keys.contains("affectedFiles"))
     }
 }
