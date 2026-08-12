@@ -5,7 +5,7 @@
 
     <description><![CDATA[
         Adds native Java refactoring operations to the built-in MCP Server.
-        The current release exposes Java Extract Method and Introduce Variable.
+        The current release exposes Java Extract Method, Introduce Variable, and Change Signature Add Parameter.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

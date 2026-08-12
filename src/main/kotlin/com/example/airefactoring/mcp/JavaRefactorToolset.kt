@@ -1,6 +1,7 @@
 package com.example.airefactoring.mcp
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.changesignature.ChangeSignatureOperation
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.intellij.mcpserver.McpToolset
@@ -13,6 +14,7 @@ import kotlinx.coroutines.currentCoroutineContext
 class JavaRefactorToolset(
     private val extractMethodOperation: ExtractMethodOperation = ExtractMethodOperation(),
     private val introduceVariableOperation: IntroduceVariableOperation = IntroduceVariableOperation(),
+    private val changeSignatureOperation: ChangeSignatureOperation = ChangeSignatureOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -47,6 +49,28 @@ class JavaRefactorToolset(
         preferredVariableName,
     )
 
+    @McpTool
+    @McpDescription(CHANGE_SIGNATURE_ADD_PARAMETER_DESCRIPTION)
+    suspend fun java_change_signature_add_parameter(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based line inside the target method declaration or body") line: Int,
+        @McpDescription("1-based column inside the target method declaration or body") column: Int,
+        @McpDescription("Name of the one new Java parameter") parameterName: String,
+        @McpDescription("Resolvable Java source type for the one new parameter") parameterType: String,
+        @McpDescription("1-based position in the resulting parameter list") parameterPosition: Int,
+        @McpDescription("Java expression inserted uniformly into all existing call sites")
+        defaultCallSiteExpression: String,
+    ): String = changeSignatureOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        line,
+        column,
+        parameterName,
+        parameterType,
+        parameterPosition,
+        defaultCallSiteExpression,
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -72,6 +96,20 @@ class JavaRefactorToolset(
                 "mutation as a fallback when this native refactoring rejects the expression. The " +
                 "target uses a project-relative Java path and 1-based source range with an inclusive " +
                 "start and exclusive end. Returns JSON with ok=true on success or a stable error " +
+                "code on failure."
+
+        const val CHANGE_SIGNATURE_ADD_PARAMETER_DESCRIPTION =
+            "Adds exactly one parameter to one ordinary Java method using IntelliJ's native Change " +
+                "Signature refactoring. Use search_symbol to obtain the exact declaration path and " +
+                "1-based line/column, then read the method and callers, present the proposed signature " +
+                "and uniform argument strategy, and call only after waiting for user approval. The " +
+                "supplied expression is inserted into all existing call sites; it is a structural " +
+                "default and may require separately reasoned caller-specific edits. Re-read every " +
+                "returned affectedFiles entry and run diagnostics, build, and tests after success. " +
+                "This tool rejects constructors, overloads, override hierarchies, method references, " +
+                "unsupported usages, and conflicts; it does not support general Change Signature. " +
+                "Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation " +
+                "as a fallback. Returns JSON with ok=true on success or ok=false with a stable error " +
                 "code on failure."
     }
 }

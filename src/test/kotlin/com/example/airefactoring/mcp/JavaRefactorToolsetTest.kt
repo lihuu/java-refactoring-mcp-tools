@@ -43,13 +43,17 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         )
     }
 
-    fun testBothPluginToolsAreExposedFromOneToolset() {
+    fun testAllPluginToolsAreExposedFromOneToolset() {
         val names = ReflectionToolsProvider().getTools()
             .map { it.descriptor.name }
             .toSet()
 
         assertTrue("java_extract_method missing", "java_extract_method" in names)
         assertTrue("java_introduce_variable missing", "java_introduce_variable" in names)
+        assertTrue(
+            "java_change_signature_add_parameter missing",
+            "java_change_signature_add_parameter" in names,
+        )
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -82,6 +86,40 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("semantic preferred variable name"))
         assertTrue(description.contains("waiting for user approval"))
         assertTrue(description.contains("Never use direct text edits"))
+    }
+
+    fun testChangeSignatureSchemaContainsExactlySevenDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_change_signature_add_parameter" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "line",
+                "column",
+                "parameterName",
+                "parameterType",
+                "parameterPosition",
+                "defaultCallSiteExpression",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testChangeSignatureDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_change_signature_add_parameter" }
+            .description
+
+        assertTrue(description.contains("search_symbol"))
+        assertTrue(description.contains("all existing call sites"))
+        assertTrue(description.contains("waiting for user approval"))
+        assertTrue(description.contains("affectedFiles"))
+        assertTrue(description.contains("Never use direct text edits"))
+        assertTrue(description.contains("does not support general Change Signature"))
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {
