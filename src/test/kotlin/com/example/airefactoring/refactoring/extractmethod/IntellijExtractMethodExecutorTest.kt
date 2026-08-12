@@ -1,5 +1,6 @@
 package com.example.airefactoring.refactoring.extractmethod
 
+import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem

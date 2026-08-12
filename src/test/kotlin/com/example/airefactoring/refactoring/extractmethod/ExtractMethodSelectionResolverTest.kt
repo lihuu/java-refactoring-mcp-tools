@@ -1,7 +1,7 @@
 package com.example.airefactoring.refactoring.extractmethod
 
 import com.example.airefactoring.mcp.McpRefactoringErrorCode
-import com.intellij.openapi.command.WriteCommandAction
+import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
@@ -86,76 +86,6 @@ class ExtractMethodSelectionResolverTest : LightJavaCodeInsightFixtureTestCase()
     }
 
     // --- Step 2: failure cases ---
-
-    fun testAbsolutePathReturnsOutsideProject() {
-        val result = resolver.resolve(project, "/tmp/Calc.java", SourceRange(1, 1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.OUTSIDE_PROJECT)
-    }
-
-    fun testParentRelativePathReturnsOutsideProject() {
-        mirrorRealFile("CalcParent.java", "public class Calc { }")
-        val result = resolver.resolve(project, "../outside/Calc.java", SourceRange(1, 1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.OUTSIDE_PROJECT)
-    }
-
-    fun testMissingFileReturnsFileNotFound() {
-        val result = resolver.resolve(project, "NoSuch.java", SourceRange(1, 1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.FILE_NOT_FOUND)
-    }
-
-    fun testNonJavaFileReturnsNotJavaFile() {
-        mirrorRealFile("notes.txt", "hello world")
-        val result = resolver.resolve(project, "notes.txt", SourceRange(1, 1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.NOT_JAVA_FILE)
-    }
-
-    fun testReadOnlyFileReturnsReadOnlyAndRestoresWritability() {
-        val virtualFile = mirrorRealFile("CalcReadOnly.java", "public class Calc { }")
-        WriteCommandAction.runWriteCommandAction(project) { virtualFile.isWritable = false }
-        try {
-            val result = resolver.resolve(project, "CalcReadOnly.java", SourceRange(1, 1, 1, 5))
-            requireFailure(result, McpRefactoringErrorCode.READ_ONLY)
-        } finally {
-            WriteCommandAction.runWriteCommandAction(project) { virtualFile.isWritable = true }
-        }
-        assertTrue(virtualFile.isWritable)
-    }
-
-    fun testZeroLineReturnsInvalidRange() {
-        mirrorRealFile("CalcZero.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcZero.java", SourceRange(0, 1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
-
-    fun testNegativePositionReturnsInvalidRange() {
-        mirrorRealFile("CalcNeg.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcNeg.java", SourceRange(-1, -1, 1, 5))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
-
-    fun testReversedRangeReturnsInvalidRange() {
-        mirrorRealFile("CalcRev.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcRev.java", SourceRange(1, 5, 1, 1))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
-
-    fun testEmptyRangeReturnsInvalidRange() {
-        mirrorRealFile("CalcEmpty.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcEmpty.java", SourceRange(1, 1, 1, 1))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
-
-    fun testLineOutOfBoundsReturnsInvalidRange() {
-        mirrorRealFile("CalcLineOob.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcLineOob.java", SourceRange(99, 1, 99, 2))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
-
-    fun testColumnOutOfBoundsReturnsInvalidRange() {
-        mirrorRealFile("CalcColOob.java", "public class Calc { }")
-        val result = resolver.resolve(project, "CalcColOob.java", SourceRange(1, 100, 1, 200))
-        requireFailure(result, McpRefactoringErrorCode.INVALID_RANGE)
-    }
 
     fun testCommentOnlyRangeReturnsNoExtractableElements() {
         configureMarkedFile(

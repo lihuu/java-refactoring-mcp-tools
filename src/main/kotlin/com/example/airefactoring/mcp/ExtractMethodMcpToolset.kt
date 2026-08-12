@@ -5,7 +5,7 @@ import com.example.airefactoring.refactoring.extractmethod.ExtractMethodPreparat
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodSelectionResolver
 import com.example.airefactoring.refactoring.extractmethod.IntellijExtractMethodExecutor
 import com.example.airefactoring.refactoring.extractmethod.SelectionResolution
-import com.example.airefactoring.refactoring.extractmethod.SourceRange
+import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.mcpserver.McpToolset

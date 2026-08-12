@@ -2,7 +2,7 @@ package com.example.airefactoring.mcp
 
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodExecutor
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodPreparationException
-import com.example.airefactoring.refactoring.extractmethod.SourceRange
+import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.impl.ReflectionToolsProvider
 import com.intellij.openapi.command.WriteCommandAction
