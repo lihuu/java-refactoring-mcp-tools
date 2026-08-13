@@ -168,6 +168,118 @@ class McpRefactoringResultTest : TestCase() {
         }
     }
 
+    fun testIntroduceConstantSuccessContainsFixedMemberMetadata() {
+        val json = McpRefactoringResult.introduceConstantSuccess(
+            projectBasePath = "/project",
+            filePath = "src/A.java",
+            requestedFieldName = "MONTHS",
+            actualFieldName = "MONTHS2",
+            fieldType = "int",
+            summary = "Introduced constant 'MONTHS2'.",
+        ).toJson()
+        val obj = Json.parseToJsonElement(json).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_introduce_constant", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("MONTHS", obj.getValue("requestedFieldName").jsonPrimitive.content)
+        assertEquals("MONTHS2", obj.getValue("actualFieldName").jsonPrimitive.content)
+        assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
+        assertEquals(
+            listOf("private", "static", "final"),
+            obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            "FIELD_DECLARATION",
+            obj.getValue("initializationPlace").jsonPrimitive.content,
+        )
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testIntroduceFieldSuccessContainsDeclarationInitializationMetadata() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.introduceFieldSuccess(
+                projectBasePath = "/project",
+                filePath = "src/A.java",
+                requestedFieldName = "result",
+                actualFieldName = "result",
+                fieldType = "int",
+                summary = "Introduced field 'result'.",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_introduce_field", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("result", obj.getValue("requestedFieldName").jsonPrimitive.content)
+        assertEquals("result", obj.getValue("actualFieldName").jsonPrimitive.content)
+        assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
+        assertEquals(
+            listOf("private", "final"),
+            obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            "FIELD_DECLARATION",
+            obj.getValue("initializationPlace").jsonPrimitive.content,
+        )
+        assertFalse(obj.containsKey("methodName"))
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testExistingSuccessShapesOmitAllNewMemberFields() {
+        val shapes = listOf(
+            Json.parseToJsonElement(
+                McpRefactoringResult.extractMethodSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    methodName = "m",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.introduceVariableSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    requestedVariableName = "v",
+                    actualVariableName = "v1",
+                    variableType = "int",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.inlineVariableSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    variableName = "v",
+                    inlinedOccurrenceCount = 1,
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.changeSignatureAddParameterSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    methodName = "m",
+                    parameterName = "p",
+                    parameterType = "int",
+                    parameterPosition = 1,
+                    defaultCallSiteExpression = "\"!\"",
+                    updatedCallSiteCount = 2,
+                    affectedFiles = listOf("A.java"),
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+        )
+        shapes.forEach { obj -> assertMemberFieldsAbsent(obj.keys) }
+    }
+
+    private fun assertMemberFieldsAbsent(keys: Set<String>) {
+        assertFalse(keys.contains("requestedFieldName"))
+        assertFalse(keys.contains("actualFieldName"))
+        assertFalse(keys.contains("fieldType"))
+        assertFalse(keys.contains("fieldModifiers"))
+        assertFalse(keys.contains("initializationPlace"))
+    }
+
     private fun assertChangeSignatureFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("parameterName"))
         assertFalse(keys.contains("parameterType"))

@@ -13,6 +13,7 @@ enum class McpRefactoringErrorCode {
     INVALID_RANGE,
     INVALID_METHOD_NAME,
     INVALID_VARIABLE_NAME,
+    INVALID_FIELD_NAME,
     NO_TARGET_METHOD,
     UNSUPPORTED_METHOD,
     INVALID_PARAMETER_NAME,
@@ -42,6 +43,11 @@ data class McpRefactoringResult private constructor(
     val requestedVariableName: String? = null,
     val actualVariableName: String? = null,
     val variableType: String? = null,
+    val requestedFieldName: String? = null,
+    val actualFieldName: String? = null,
+    val fieldType: String? = null,
+    val fieldModifiers: List<String>? = null,
+    val initializationPlace: String? = null,
     val variableName: String? = null,
     val inlinedOccurrenceCount: Int? = null,
     val parameterName: String? = null,
@@ -89,6 +95,46 @@ data class McpRefactoringResult private constructor(
             requestedVariableName = requestedVariableName,
             actualVariableName = actualVariableName,
             variableType = variableType,
+            summary = summary,
+        )
+
+        fun introduceConstantSuccess(
+            projectBasePath: String,
+            filePath: String,
+            requestedFieldName: String,
+            actualFieldName: String,
+            fieldType: String,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_introduce_constant",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            requestedFieldName = requestedFieldName,
+            actualFieldName = actualFieldName,
+            fieldType = fieldType,
+            fieldModifiers = listOf("private", "static", "final"),
+            initializationPlace = "FIELD_DECLARATION",
+            summary = summary,
+        )
+
+        fun introduceFieldSuccess(
+            projectBasePath: String,
+            filePath: String,
+            requestedFieldName: String,
+            actualFieldName: String,
+            fieldType: String,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_introduce_field",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            requestedFieldName = requestedFieldName,
+            actualFieldName = actualFieldName,
+            fieldType = fieldType,
+            fieldModifiers = listOf("private", "final"),
+            initializationPlace = "FIELD_DECLARATION",
             summary = summary,
         )
 
