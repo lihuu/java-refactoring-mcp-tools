@@ -41,6 +41,8 @@ data class McpRefactoringResult private constructor(
     val requestedVariableName: String? = null,
     val actualVariableName: String? = null,
     val variableType: String? = null,
+    val variableName: String? = null,
+    val inlinedOccurrenceCount: Int? = null,
     val parameterName: String? = null,
     val parameterType: String? = null,
     val parameterPosition: Int? = null,
@@ -86,6 +88,22 @@ data class McpRefactoringResult private constructor(
             requestedVariableName = requestedVariableName,
             actualVariableName = actualVariableName,
             variableType = variableType,
+            summary = summary,
+        )
+
+        fun inlineVariableSuccess(
+            projectBasePath: String,
+            filePath: String,
+            variableName: String,
+            inlinedOccurrenceCount: Int,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_inline_variable",
+            projectBasePath = projectBasePath,
+            filePath = filePath,
+            variableName = variableName,
+            inlinedOccurrenceCount = inlinedOccurrenceCount,
             summary = summary,
         )
 

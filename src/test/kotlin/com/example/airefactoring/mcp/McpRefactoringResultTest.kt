@@ -9,6 +9,26 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class McpRefactoringResultTest : TestCase() {
+    fun testInlineVariableSuccessContainsVariableAndOccurrenceFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.inlineVariableSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/Price.java",
+                variableName = "subtotal",
+                inlinedOccurrenceCount = 2,
+                summary = "Inlined 2 occurrences of local variable 'subtotal' and removed its declaration.",
+            ).toJson(),
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_inline_variable", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("subtotal", obj.getValue("variableName").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("inlinedOccurrenceCount").jsonPrimitive.int)
+        assertFalse(obj.containsKey("requestedVariableName"))
+        assertFalse(obj.containsKey("parameterName"))
+        assertFalse(obj.containsKey("code"))
+    }
+
     fun testIntroduceVariableSuccessContainsRequestedActualAndTypeFields() {
         val obj = Json.parseToJsonElement(
             McpRefactoringResult.introduceVariableSuccess(
@@ -29,6 +49,7 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("methodName"))
         assertFalse(obj.containsKey("code"))
         assertChangeSignatureFieldsAbsent(obj.keys)
+        assertInlineVariableFieldsAbsent(obj.keys)
     }
 
     fun testExtractMethodSuccessOmitsIntroduceVariableFields() {
@@ -45,6 +66,7 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("actualVariableName"))
         assertFalse(obj.containsKey("variableType"))
         assertChangeSignatureFieldsAbsent(obj.keys)
+        assertInlineVariableFieldsAbsent(obj.keys)
     }
 
     fun testChangeSignatureSuccessContainsParameterAndAffectedUsageFields() {
@@ -79,6 +101,7 @@ class McpRefactoringResultTest : TestCase() {
         )
         assertFalse(obj.containsKey("requestedVariableName"))
         assertFalse(obj.containsKey("code"))
+        assertInlineVariableFieldsAbsent(obj.keys)
     }
 
     fun testSuccessContainsOnlySuccessFields() {
@@ -152,5 +175,10 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(keys.contains("defaultCallSiteExpression"))
         assertFalse(keys.contains("updatedCallSiteCount"))
         assertFalse(keys.contains("affectedFiles"))
+    }
+
+    private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
+        assertFalse(keys.contains("variableName"))
+        assertFalse(keys.contains("inlinedOccurrenceCount"))
     }
 }
