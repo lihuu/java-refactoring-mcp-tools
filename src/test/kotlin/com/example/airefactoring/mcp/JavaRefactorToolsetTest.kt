@@ -54,7 +54,31 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             "java_change_signature_add_parameter missing",
             "java_change_signature_add_parameter" in names,
         )
+        assertTrue("java_inline_variable missing", "java_inline_variable" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testInlineVariableSchemaContainsExactlyThreeDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_inline_variable" }
+
+        assertEquals(
+            setOf("pathInProject", "line", "column", "projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testInlineVariableDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_inline_variable" }
+            .description
+
+        assertTrue(description.contains("all supported read references"))
+        assertTrue(description.contains("deletes the declaration"))
+        assertTrue(description.contains("waiting for user approval"))
+        assertTrue(description.contains("Never use direct text edits"))
     }
 
     fun testIntroduceVariableSchemaContainsExactlySixDeclaredArguments() {

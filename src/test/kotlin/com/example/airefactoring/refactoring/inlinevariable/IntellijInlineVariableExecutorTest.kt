@@ -111,13 +111,13 @@ class IntellijInlineVariableExecutorTest : LightJavaCodeInsightFixtureTestCase()
         assertEquals(sourceAfterExternalWrite, selection.document.text)
     }
 
-    fun testDoesNotSaveUnrelatedDirtyDocument() {
+    fun testInlineVariableDoesNotSaveUnrelatedDirtyDocument() {
         val selection = resolve(
-            "SaveTarget.java",
-            "class SaveTarget { int value() { int sum = 1 + 2; return sum; } }",
+            "InlineSaveTarget.java",
+            "class InlineSaveTarget { int value() { int sum = 1 + 2; return sum; } }",
             "sum =",
         )
-        val unrelated = createAndDirtyRealJavaFile("Unrelated.java")
+        val unrelated = createAndDirtyRealJavaFile("InlineUnrelated.java")
         assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(unrelated))
 
         runExecutor { executor.inline(project, selection) }

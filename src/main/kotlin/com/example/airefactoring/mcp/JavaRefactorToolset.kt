@@ -3,6 +3,7 @@ package com.example.airefactoring.mcp
 import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.refactoring.changesignature.ChangeSignatureOperation
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperation
+import com.example.airefactoring.refactoring.inlinevariable.InlineVariableOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -15,6 +16,7 @@ class JavaRefactorToolset(
     private val extractMethodOperation: ExtractMethodOperation = ExtractMethodOperation(),
     private val introduceVariableOperation: IntroduceVariableOperation = IntroduceVariableOperation(),
     private val changeSignatureOperation: ChangeSignatureOperation = ChangeSignatureOperation(),
+    private val inlineVariableOperation: InlineVariableOperation = InlineVariableOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -71,6 +73,25 @@ class JavaRefactorToolset(
         defaultCallSiteExpression,
     )
 
+    @McpTool
+    @McpDescription(INLINE_VARIABLE_DESCRIPTION)
+    suspend fun java_inline_variable(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription(
+            "1-based line on the local-variable declaration name or a resolved reference",
+        )
+        line: Int,
+        @McpDescription(
+            "1-based column on the local-variable declaration name or a resolved reference",
+        )
+        column: Int,
+    ): String = inlineVariableOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        line,
+        column,
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -111,5 +132,17 @@ class JavaRefactorToolset(
                 "Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation " +
                 "as a fallback. Returns JSON with ok=true on success or ok=false with a stable error " +
                 "code on failure."
+
+        const val INLINE_VARIABLE_DESCRIPTION =
+            "Inlines one Java local variable using IntelliJ's native Inline Variable refactoring. " +
+                "Use it after reading the complete containing method and all variable uses, " +
+                "proposing the readability change, and waiting for user approval. Pass a fresh " +
+                "1-based line and column on the declaration name or a resolved reference. The " +
+                "tool replaces all supported read references and deletes the declaration as one " +
+                "Undoable operation; it does not support inlining one occurrence. Re-read the " +
+                "changed file and run diagnostics, build, and tests after success. Never use " +
+                "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
+                "fallback when the native refactoring rejects the target. Returns JSON with " +
+                "ok=true on success or ok=false with a stable error code on failure."
     }
 }
