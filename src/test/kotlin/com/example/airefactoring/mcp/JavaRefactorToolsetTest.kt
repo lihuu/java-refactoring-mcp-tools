@@ -55,7 +55,86 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             "java_change_signature_add_parameter" in names,
         )
         assertTrue("java_inline_variable missing", "java_inline_variable" in names)
+        assertTrue("java_introduce_constant missing", "java_introduce_constant" in names)
+        assertTrue("java_introduce_field missing", "java_introduce_field" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testIntroduceConstantSchemaContainsExactlySixDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_constant" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "preferredName",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testIntroduceConstantDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_constant" }
+            .description
+
+        assertTrue(description.contains("current class"))
+        assertTrue(description.contains("exact source range"))
+        assertTrue(description.contains("selected occurrence"))
+        assertTrue(description.contains("private static final"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("diagnostics, build, and tests"))
+        assertTrue(description.contains("Never use direct text edits"))
+        assertFalse(
+            "constant description must not route the agent to the field tool",
+            description.contains("java_introduce_field"),
+        )
+    }
+
+    fun testIntroduceFieldSchemaContainsExactlySixDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_field" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "preferredName",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testIntroduceFieldDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_field" }
+            .description
+
+        assertTrue(description.contains("current class"))
+        assertTrue(description.contains("exact source range"))
+        assertTrue(description.contains("selected occurrence"))
+        assertTrue(description.contains("private final"))
+        assertTrue(description.contains("initialized at its declaration"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("diagnostics, build, and tests"))
+        assertTrue(description.contains("Never use direct text edits"))
+        assertFalse(
+            "field description must not route the agent to the constant tool",
+            description.contains("java_introduce_constant"),
+        )
     }
 
     fun testInlineVariableSchemaContainsExactlyThreeDeclaredArguments() {

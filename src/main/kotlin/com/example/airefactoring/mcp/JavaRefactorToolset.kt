@@ -4,6 +4,8 @@ import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.refactoring.changesignature.ChangeSignatureOperation
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperation
 import com.example.airefactoring.refactoring.inlinevariable.InlineVariableOperation
+import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOperation
+import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -17,6 +19,8 @@ class JavaRefactorToolset(
     private val introduceVariableOperation: IntroduceVariableOperation = IntroduceVariableOperation(),
     private val changeSignatureOperation: ChangeSignatureOperation = ChangeSignatureOperation(),
     private val inlineVariableOperation: InlineVariableOperation = InlineVariableOperation(),
+    private val introduceConstantOperation: IntroduceConstantOperation = IntroduceConstantOperation(),
+    private val introduceFieldOperation: IntroduceFieldOperation = IntroduceFieldOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -92,6 +96,38 @@ class JavaRefactorToolset(
         column,
     )
 
+    @McpTool
+    @McpDescription(INTRODUCE_CONSTANT_DESCRIPTION)
+    suspend fun java_introduce_constant(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line") startLine: Int,
+        @McpDescription("1-based inclusive start column") startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position") endLine: Int,
+        @McpDescription("1-based exclusive end column") endColumn: Int,
+        @McpDescription("Agent-selected preferred Java constant field name") preferredName: String,
+    ): String = introduceConstantOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+        preferredName,
+    )
+
+    @McpTool
+    @McpDescription(INTRODUCE_FIELD_DESCRIPTION)
+    suspend fun java_introduce_field(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line") startLine: Int,
+        @McpDescription("1-based inclusive start column") startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position") endLine: Int,
+        @McpDescription("1-based exclusive end column") endColumn: Int,
+        @McpDescription("Agent-selected preferred Java field name") preferredName: String,
+    ): String = introduceFieldOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+        preferredName,
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -144,5 +180,33 @@ class JavaRefactorToolset(
                 "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
                 "fallback when the native refactoring rejects the target. Returns JSON with " +
                 "ok=true on success or ok=false with a stable error code on failure."
+
+        const val INTRODUCE_CONSTANT_DESCRIPTION =
+            "Introduces one exact Java expression as one private static final constant field of " +
+                "the current class using IntelliJ's native Introduce Constant refactoring. Use " +
+                "it after reading the containing method, choosing a semantic preferred field " +
+                "name, presenting the change, and waiting for user approval. Only the selected " +
+                "occurrence is extracted; the new field is declared in the current class and " +
+                "initialized at its declaration. The target is a project-relative Java file path " +
+                "and a 1-based exact source range with an inclusive start and exclusive end. " +
+                "Re-read the modified file and run diagnostics, build, and tests after success. " +
+                "Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
+                "mutation as a fallback when the native refactoring refuses the expression. " +
+                "Returns JSON with ok=true on success or ok=false with a stable error code on " +
+                "failure."
+
+        const val INTRODUCE_FIELD_DESCRIPTION =
+            "Introduces one exact Java expression as one private final instance field of the " +
+                "current class using IntelliJ's native Introduce Field refactoring. Use it " +
+                "after reading the containing method, choosing a semantic preferred field name, " +
+                "presenting the change, and waiting for user approval. Only the selected " +
+                "occurrence is replaced; the new field is declared in the current class and " +
+                "initialized at its declaration. The target is a project-relative Java file path " +
+                "and a 1-based exact source range with an inclusive start and exclusive end. " +
+                "Re-read the modified file and run diagnostics, build, and tests after success. " +
+                "Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
+                "mutation as a fallback when the native refactoring refuses the expression. " +
+                "Returns JSON with ok=true on success or ok=false with a stable error code on " +
+                "failure."
     }
 }
