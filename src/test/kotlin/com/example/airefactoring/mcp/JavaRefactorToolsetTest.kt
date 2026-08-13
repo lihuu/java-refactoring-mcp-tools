@@ -91,6 +91,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("private static final"))
         assertTrue(description.contains("native"))
         assertTrue(description.contains("diagnostics, build, and tests"))
+        assertTrue(description.contains("Read the current source before supplying the range"))
+        assertTrue(description.contains("positions change after every refactoring"))
         assertTrue(description.contains("Never use direct text edits"))
         assertFalse(
             "constant description must not route the agent to the field tool",
@@ -130,6 +132,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("initialized at its declaration"))
         assertTrue(description.contains("native"))
         assertTrue(description.contains("diagnostics, build, and tests"))
+        assertTrue(description.contains("Read the current source before supplying the range"))
+        assertTrue(description.contains("positions change after every refactoring"))
         assertTrue(description.contains("Never use direct text edits"))
         assertFalse(
             "field description must not route the agent to the constant tool",

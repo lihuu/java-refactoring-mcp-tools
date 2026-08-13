@@ -114,7 +114,6 @@ data class McpRefactoringResult private constructor(
             actualFieldName = actualFieldName,
             fieldType = fieldType,
             fieldModifiers = listOf("private", "static", "final"),
-            initializationPlace = "FIELD_DECLARATION",
             summary = summary,
         )
 

@@ -189,8 +189,10 @@ class JavaRefactorToolset(
                 "occurrence is extracted; the new field is declared in the current class and " +
                 "initialized at its declaration. The target is a project-relative Java file path " +
                 "and a 1-based exact source range with an inclusive start and exclusive end. " +
-                "Re-read the modified file and run diagnostics, build, and tests after success. " +
-                "Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
+                "Read the current source before supplying the range, and re-read the modified " +
+                "file before computing the next source range because line and column positions " +
+                "change after every refactoring. Run diagnostics, build, and tests after " +
+                "success. Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
                 "mutation as a fallback when the native refactoring refuses the expression. " +
                 "Returns JSON with ok=true on success or ok=false with a stable error code on " +
                 "failure."
@@ -203,8 +205,10 @@ class JavaRefactorToolset(
                 "occurrence is replaced; the new field is declared in the current class and " +
                 "initialized at its declaration. The target is a project-relative Java file path " +
                 "and a 1-based exact source range with an inclusive start and exclusive end. " +
-                "Re-read the modified file and run diagnostics, build, and tests after success. " +
-                "Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
+                "Read the current source before supplying the range, and re-read the modified " +
+                "file before computing the next source range because line and column positions " +
+                "change after every refactoring. Run diagnostics, build, and tests after " +
+                "success. Never use direct text edits, patches, whole-file rewrites, or direct PSI " +
                 "mutation as a fallback when the native refactoring refuses the expression. " +
                 "Returns JSON with ok=true on success or ok=false with a stable error code on " +
                 "failure."

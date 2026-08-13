@@ -135,6 +135,20 @@ class IntroduceMemberSelectionResolverTest : LightJavaCodeInsightFixtureTestCase
         assertEquals(original, myFixture.editor.document.text)
     }
 
+    fun testUnknownTypeExpressionIsUnsupportedWithoutMutation() {
+        val range = configureMarkedFile(
+            "UnknownTypeMember.java",
+            "class UnknownTypeMember { Object value() { return <selection>unknownValue()</selection>; } }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(project, "UnknownTypeMember.java", range),
+            McpRefactoringErrorCode.UNSUPPORTED_EXPRESSION,
+        )
+        assertEquals(original, myFixture.editor.document.text)
+    }
+
     fun testExpressionOutsideClassIsUnsupportedDestination() {
         val range = configureMarkedFile(
             "package-info.java",

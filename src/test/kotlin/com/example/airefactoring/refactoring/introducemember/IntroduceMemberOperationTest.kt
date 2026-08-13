@@ -58,9 +58,9 @@ class IntroduceMemberOperationTest : LightJavaCodeInsightFixtureTestCase() {
             listOf("private", "static", "final"),
             obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
         )
-        assertEquals(
-            "FIELD_DECLARATION",
-            obj.getValue("initializationPlace").jsonPrimitive.content,
+        assertFalse(
+            "Constant success omits initializationPlace (Field-only metadata)",
+            obj.containsKey("initializationPlace"),
         )
         assertEquals(project.basePath, obj.getValue("projectBasePath").jsonPrimitive.content)
         assertEquals(fileName, obj.getValue("filePath").jsonPrimitive.content)

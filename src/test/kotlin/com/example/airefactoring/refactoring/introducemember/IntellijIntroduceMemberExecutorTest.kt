@@ -212,6 +212,43 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
         assertEquals(original, selection.document.text)
     }
 
+    fun testNestedClassFieldTargetThrowsPreparationExceptionWithoutMutationOrDialog() {
+        val selection = resolveFirstExpression(
+            "NestedFieldMember.java",
+            "class NestedFieldMember { static class Inner { int value() { return 12; } } }",
+            "12",
+        )
+        val original = selection.document.text
+        val throwingDialog = object : TestDialog {
+            override fun show(message: String): Int =
+                throw AssertionError("Introduce Member must not open a dialog: $message")
+        }
+        val previousDialog = TestDialogManager.setTestDialog(throwingDialog)
+
+        try {
+            try {
+                runExecutor {
+                    executor.introduce(
+                        project,
+                        selection,
+                        "BASE",
+                        IntroduceMemberProfile.InstanceFinalField,
+                    )
+                }
+                fail("expected nested-class Field target to fail preparation")
+            } catch (e: IntroduceMemberPreparationException) {
+                assertTrue("preparation message must not be blank", e.message!!.isNotBlank())
+                assertTrue(
+                    "message must explain the top-level-only restriction",
+                    e.message!!.contains("top-level"),
+                )
+            }
+        } finally {
+            TestDialogManager.setTestDialog(previousDialog)
+        }
+        assertEquals(original, selection.document.text)
+    }
+
     fun testStaleExpressionThrowsPreparationExceptionWithoutMutation() {
         val selection = resolveFirstExpression(
             "StaleMember.java",

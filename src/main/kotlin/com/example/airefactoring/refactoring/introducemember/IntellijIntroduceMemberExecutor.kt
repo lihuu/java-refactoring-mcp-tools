@@ -41,6 +41,15 @@ class IntellijIntroduceMemberExecutor : IntroduceMemberExecutor {
                 "The selected expression changed before Introduce Member could run.",
             )
         }
+        if (profile is IntroduceMemberProfile.InstanceFinalField &&
+            selection.containingClass.containingClass != null
+        ) {
+            throw IntroduceMemberPreparationException(
+                "V1 Introduce Field targets only the top-level containing class; the " +
+                    "selected expression is inside the nested class " +
+                    "'${selection.containingClass.name}'.",
+            )
+        }
         val actualName = JavaCodeStyleManager.getInstance(project)
             .suggestUniqueVariableName(preferredName, selection.expression, true)
         val settings = BaseExpressionToFieldHandler.Settings(
