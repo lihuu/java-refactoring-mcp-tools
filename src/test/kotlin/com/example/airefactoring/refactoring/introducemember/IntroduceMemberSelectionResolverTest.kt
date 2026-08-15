@@ -34,6 +34,45 @@ class IntroduceMemberSelectionResolverTest : LightJavaCodeInsightFixtureTestCase
         assertEquals("12", selection.expression.text)
         assertEquals("int", selection.memberType.canonicalText)
         assertEquals("LiteralMember", selection.containingClass.name)
+        assertEquals("LiteralMember", selection.targetClass.name)
+    }
+
+    fun testExplicitEnclosingTargetClassIsResolvedWithoutChangingTheExpressionOwner() {
+        val range = configureMarkedFile(
+            "NestedTargetMember.java",
+            "class NestedTargetMember { class Inner { int value() { return <selection>12</selection>; } } }",
+        )
+
+        val result = resolver.resolve(
+            project,
+            "NestedTargetMember.java",
+            range,
+            "NestedTargetMember",
+        )
+
+        assertTrue(result is IntroduceMemberSelectionResolution.Success)
+        val selection = (result as IntroduceMemberSelectionResolution.Success).selection
+        assertEquals("Inner", selection.containingClass.name)
+        assertEquals("NestedTargetMember", selection.targetClass.name)
+    }
+
+    fun testTargetOutsideContainingClassChainIsUnsupportedDestination() {
+        val range = configureMarkedFile(
+            "UnrelatedTargetMember.java",
+            "class UnrelatedTargetMember { class Inner { int value() { return <selection>12</selection>; } } class Sibling {} }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(
+                project,
+                "UnrelatedTargetMember.java",
+                range,
+                "UnrelatedTargetMember.Sibling",
+            ),
+            McpRefactoringErrorCode.UNSUPPORTED_DESTINATION,
+        )
+        assertEquals(original, myFixture.editor.document.text)
     }
 
     fun testResolvesExactStringLiteral() {

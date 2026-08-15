@@ -47,6 +47,7 @@ data class McpRefactoringResult private constructor(
     val actualFieldName: String? = null,
     val fieldType: String? = null,
     val fieldModifiers: List<String>? = null,
+    val targetClassQualifiedName: String? = null,
     val initializationPlace: String? = null,
     val variableName: String? = null,
     val inlinedOccurrenceCount: Int? = null,
@@ -104,6 +105,7 @@ data class McpRefactoringResult private constructor(
             requestedFieldName: String,
             actualFieldName: String,
             fieldType: String,
+            targetClassQualifiedName: String,
             summary: String,
         ) = McpRefactoringResult(
             ok = true,
@@ -114,6 +116,7 @@ data class McpRefactoringResult private constructor(
             actualFieldName = actualFieldName,
             fieldType = fieldType,
             fieldModifiers = listOf("private", "static", "final"),
+            targetClassQualifiedName = targetClassQualifiedName,
             summary = summary,
         )
 
@@ -123,6 +126,7 @@ data class McpRefactoringResult private constructor(
             requestedFieldName: String,
             actualFieldName: String,
             fieldType: String,
+            targetClassQualifiedName: String,
             summary: String,
         ) = McpRefactoringResult(
             ok = true,
@@ -133,6 +137,7 @@ data class McpRefactoringResult private constructor(
             actualFieldName = actualFieldName,
             fieldType = fieldType,
             fieldModifiers = listOf("private", "final"),
+            targetClassQualifiedName = targetClassQualifiedName,
             initializationPlace = "FIELD_DECLARATION",
             summary = summary,
         )

@@ -105,11 +105,17 @@ class JavaRefactorToolset(
         @McpDescription("1-based line containing the exclusive end position") endLine: Int,
         @McpDescription("1-based exclusive end column") endColumn: Int,
         @McpDescription("Agent-selected preferred Java constant field name") preferredName: String,
+        @McpDescription(
+            "Optional qualified name of the containing or enclosing class that will own the " +
+                "constant; omitted means the nearest containing class",
+        )
+        targetClassQualifiedName: String? = null,
     ): String = introduceConstantOperation.execute(
         currentCoroutineContext().project,
         pathInProject,
         SourceRange(startLine, startColumn, endLine, endColumn),
         preferredName,
+        targetClassQualifiedName,
     )
 
     @McpTool
@@ -121,11 +127,17 @@ class JavaRefactorToolset(
         @McpDescription("1-based line containing the exclusive end position") endLine: Int,
         @McpDescription("1-based exclusive end column") endColumn: Int,
         @McpDescription("Agent-selected preferred Java field name") preferredName: String,
+        @McpDescription(
+            "Optional qualified name of the containing or enclosing class that will own the " +
+                "field; omitted means the nearest containing class",
+        )
+        targetClassQualifiedName: String? = null,
     ): String = introduceFieldOperation.execute(
         currentCoroutineContext().project,
         pathInProject,
         SourceRange(startLine, startColumn, endLine, endColumn),
         preferredName,
+        targetClassQualifiedName,
     )
 
     private companion object {
@@ -183,10 +195,12 @@ class JavaRefactorToolset(
 
         const val INTRODUCE_CONSTANT_DESCRIPTION =
             "Introduces one exact Java expression as one private static final constant field of " +
-                "the current class using IntelliJ's native Introduce Constant refactoring. Use " +
+                "the nearest containing class by default using IntelliJ's native Introduce Constant " +
+                "refactoring. Pass targetClassQualifiedName when the agent explicitly chooses " +
+                "that containing class or one of its enclosing classes. Use " +
                 "it after reading the containing method, choosing a semantic preferred field " +
                 "name, presenting the change, and waiting for user approval. Only the selected " +
-                "occurrence is extracted; the new field is declared in the current class and " +
+                "occurrence is extracted; the new field is declared in the resolved target class and " +
                 "initialized at its declaration. The target is a project-relative Java file path " +
                 "and a 1-based exact source range with an inclusive start and exclusive end. " +
                 "Read the current source before supplying the range, and re-read the modified " +
@@ -199,10 +213,12 @@ class JavaRefactorToolset(
 
         const val INTRODUCE_FIELD_DESCRIPTION =
             "Introduces one exact Java expression as one private final instance field of the " +
-                "current class using IntelliJ's native Introduce Field refactoring. Use it " +
+                "nearest containing class by default using IntelliJ's native Introduce Field " +
+                "refactoring. Pass targetClassQualifiedName when the agent explicitly chooses " +
+                "that containing class or one of its enclosing classes. Use it " +
                 "after reading the containing method, choosing a semantic preferred field name, " +
                 "presenting the change, and waiting for user approval. Only the selected " +
-                "occurrence is replaced; the new field is declared in the current class and " +
+                "occurrence is replaced; the new field is declared in the resolved target class and " +
                 "initialized at its declaration. The target is a project-relative Java file path " +
                 "and a 1-based exact source range with an inclusive start and exclusive end. " +
                 "Read the current source before supplying the range, and re-read the modified " +

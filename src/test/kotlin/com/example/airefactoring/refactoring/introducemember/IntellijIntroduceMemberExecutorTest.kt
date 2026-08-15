@@ -212,13 +212,12 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
         assertEquals(original, selection.document.text)
     }
 
-    fun testNestedClassFieldTargetThrowsPreparationExceptionWithoutMutationOrDialog() {
+    fun testNestedClassFieldDefaultsToNearestContainingClassWithoutChooser() {
         val selection = resolveFirstExpression(
             "NestedFieldMember.java",
             "class NestedFieldMember { static class Inner { int value() { return 12; } } }",
             "12",
         )
-        val original = selection.document.text
         val throwingDialog = object : TestDialog {
             override fun show(message: String): Int =
                 throw AssertionError("Introduce Member must not open a dialog: $message")
@@ -226,27 +225,84 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
         val previousDialog = TestDialogManager.setTestDialog(throwingDialog)
 
         try {
-            try {
-                runExecutor {
-                    executor.introduce(
-                        project,
-                        selection,
-                        "BASE",
-                        IntroduceMemberProfile.InstanceFinalField,
-                    )
-                }
-                fail("expected nested-class Field target to fail preparation")
-            } catch (e: IntroduceMemberPreparationException) {
-                assertTrue("preparation message must not be blank", e.message!!.isNotBlank())
-                assertTrue(
-                    "message must explain the top-level-only restriction",
-                    e.message!!.contains("top-level"),
+            runExecutor {
+                executor.introduce(
+                    project,
+                    selection,
+                    "base",
+                    IntroduceMemberProfile.InstanceFinalField,
                 )
             }
         } finally {
             TestDialogManager.setTestDialog(previousDialog)
         }
-        assertEquals(original, selection.document.text)
+        PsiDocumentManager.getInstance(project).commitDocument(selection.document)
+        assertTrue(selection.containingClass.fields.any { it.name == "base" })
+        assertFalse(selection.targetClass.containingClass == null)
+    }
+
+    fun testConstantCanTargetExplicitEnclosingClassWithoutChooser() {
+        val selection = resolveFirstExpression(
+            "OuterConstantMember.java",
+            "class OuterConstantMember { class Inner { int value() { return 12; } } }",
+            "12",
+            "OuterConstantMember",
+        )
+        val throwingDialog = object : TestDialog {
+            override fun show(message: String): Int =
+                throw AssertionError("Introduce Member must not open a dialog: $message")
+        }
+        val previousDialog = TestDialogManager.setTestDialog(throwingDialog)
+
+        try {
+            runExecutor {
+                executor.introduce(
+                    project,
+                    selection,
+                    "BASE",
+                    IntroduceMemberProfile.Constant,
+                )
+            }
+        } finally {
+            TestDialogManager.setTestDialog(previousDialog)
+        }
+        PsiDocumentManager.getInstance(project).commitDocument(selection.document)
+        assertEquals("OuterConstantMember", selection.targetClass.name)
+        assertTrue(selection.targetClass.fields.any { it.name == "BASE" })
+        assertFalse(selection.containingClass.fields.any { it.name == "BASE" })
+    }
+
+    fun testFieldCanTargetExplicitEnclosingClassWithoutChooser() {
+        val selection = resolveFirstExpression(
+            "OuterFieldMember.java",
+            "class OuterFieldMember { class Inner { int value() { return 12; } } }",
+            "12",
+            "OuterFieldMember",
+        )
+        val throwingDialog = object : TestDialog {
+            override fun show(message: String): Int =
+                throw AssertionError("Introduce Member must not open a dialog: $message")
+        }
+        val previousDialog = TestDialogManager.setTestDialog(throwingDialog)
+
+        try {
+            runExecutor {
+                executor.introduce(
+                    project,
+                    selection,
+                    "base",
+                    IntroduceMemberProfile.InstanceFinalField,
+                )
+            }
+        } finally {
+            TestDialogManager.setTestDialog(previousDialog)
+        }
+        PsiDocumentManager.getInstance(project).commitDocument(selection.document)
+        val field = selection.targetClass.fields.single { it.name == "base" }
+        assertTrue(field.hasModifierProperty(PsiModifier.PRIVATE))
+        assertTrue(field.hasModifierProperty(PsiModifier.FINAL))
+        assertFalse(field.hasModifierProperty(PsiModifier.STATIC))
+        assertFalse(selection.containingClass.fields.any { it.name == "base" })
     }
 
     fun testStaleExpressionThrowsPreparationExceptionWithoutMutation() {
@@ -336,12 +392,43 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
         assertEquals(original, selection.document.text)
     }
 
+    fun testPostMutationFailureUsesNativeUndoToRestoreExactOriginalSource() {
+        val selection = resolveFirstExpression(
+            "AtomicFailureMember.java",
+            "class AtomicFailureMember { int value() { return 12; } }",
+            "12",
+        )
+        val original = selection.document.text
+        val failingExecutor = IntellijIntroduceMemberExecutor(
+            resultInspector = IntroduceMemberResultInspector { _, _, _, _ ->
+                throw IllegalStateException("injected post-mutation failure")
+            },
+        )
+
+        try {
+            runExecutor {
+                failingExecutor.introduce(
+                    project,
+                    selection,
+                    "BASE",
+                    IntroduceMemberProfile.Constant,
+                )
+            }
+            fail("expected the post-mutation failure")
+        } catch (e: IllegalStateException) {
+            assertEquals("injected post-mutation failure", e.message)
+        }
+        PsiDocumentManager.getInstance(project).commitDocument(selection.document)
+        assertEquals(original, selection.document.text)
+    }
+
     // --- helpers ---
 
     private fun resolveFirstExpression(
         fileName: String,
         source: String,
         expressionText: String,
+        targetClassQualifiedName: String? = null,
     ): IntroduceMemberSelection {
         val virtualFile = mirrorRealFile(fileName, source)
         val document = FileDocumentManager.getInstance().getDocument(virtualFile)!!
@@ -351,6 +438,7 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
             project,
             fileName,
             range(document, startOffset, startOffset + expressionText.length),
+            targetClassQualifiedName,
         )
         assertTrue(
             "expected successful selection but was $result",
@@ -375,6 +463,7 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
             document,
             expression,
             expression.type!!,
+            containingClass,
             containingClass,
         )
     }

@@ -22,6 +22,7 @@ data class IntroduceMemberSelection(
     val expression: PsiExpression,
     val memberType: PsiType,
     val containingClass: PsiClass,
+    val targetClass: PsiClass,
 )
 
 sealed interface IntroduceMemberSelectionResolution {
@@ -44,6 +45,7 @@ class IntroduceMemberSelectionResolver(
         project: Project,
         pathInProject: String,
         range: SourceRange,
+        targetClassQualifiedName: String? = null,
     ): IntroduceMemberSelectionResolution {
         val target = when (val resolution = targetResolver.resolve(project, pathInProject, range)) {
             is JavaSourceTargetResolution.Failure -> return failure(
@@ -79,6 +81,12 @@ class IntroduceMemberSelectionResolver(
                 McpRefactoringErrorCode.UNSUPPORTED_DESTINATION,
                 "The selected expression is not inside a Java class.",
             )
+        val targetClass = resolveTargetClass(containingClass, targetClassQualifiedName)
+            ?: return failure(
+                McpRefactoringErrorCode.UNSUPPORTED_DESTINATION,
+                "Target class '$targetClassQualifiedName' is not the selected expression's " +
+                    "containing class or one of its enclosing classes.",
+            )
         return IntroduceMemberSelectionResolution.Success(
             IntroduceMemberSelection(
                 target.file,
@@ -86,8 +94,18 @@ class IntroduceMemberSelectionResolver(
                 expression,
                 type,
                 containingClass,
+                targetClass,
             ),
         )
+    }
+
+    private fun resolveTargetClass(
+        containingClass: PsiClass,
+        targetClassQualifiedName: String?,
+    ): PsiClass? {
+        if (targetClassQualifiedName == null) return containingClass
+        return generateSequence(containingClass) { it.containingClass }
+            .firstOrNull { it.qualifiedName == targetClassQualifiedName }
     }
 
     private fun unsupported(message: String): IntroduceMemberSelectionResolution = failure(

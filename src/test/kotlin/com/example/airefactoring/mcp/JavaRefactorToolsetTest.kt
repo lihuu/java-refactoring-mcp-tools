@@ -41,6 +41,10 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             ),
             descriptor.inputSchema.propertiesSchema.keys,
         )
+        assertFalse(
+            "targetClassQualifiedName must remain optional",
+            "targetClassQualifiedName" in descriptor.inputSchema.requiredProperties,
+        )
     }
 
     fun testAllPluginToolsAreExposedFromOneToolset() {
@@ -60,7 +64,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
-    fun testIntroduceConstantSchemaContainsExactlySixDeclaredArguments() {
+    fun testIntroduceConstantSchemaContainsOptionalTargetClassArgument() {
         val descriptor = ReflectionToolsProvider().getTools()
             .map { it.descriptor }
             .single { it.name == "java_introduce_constant" }
@@ -73,9 +77,14 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
                 "endLine",
                 "endColumn",
                 "preferredName",
+                "targetClassQualifiedName",
                 "projectPath",
             ),
             descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertFalse(
+            "targetClassQualifiedName must remain optional",
+            "targetClassQualifiedName" in descriptor.inputSchema.requiredProperties,
         )
     }
 
@@ -85,7 +94,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             .single { it.name == "java_introduce_constant" }
             .description
 
-        assertTrue(description.contains("current class"))
+        assertTrue(description.contains("nearest containing class"))
+        assertTrue(description.contains("targetClassQualifiedName"))
         assertTrue(description.contains("exact source range"))
         assertTrue(description.contains("selected occurrence"))
         assertTrue(description.contains("private static final"))
@@ -100,7 +110,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         )
     }
 
-    fun testIntroduceFieldSchemaContainsExactlySixDeclaredArguments() {
+    fun testIntroduceFieldSchemaContainsOptionalTargetClassArgument() {
         val descriptor = ReflectionToolsProvider().getTools()
             .map { it.descriptor }
             .single { it.name == "java_introduce_field" }
@@ -113,6 +123,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
                 "endLine",
                 "endColumn",
                 "preferredName",
+                "targetClassQualifiedName",
                 "projectPath",
             ),
             descriptor.inputSchema.propertiesSchema.keys,
@@ -125,7 +136,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             .single { it.name == "java_introduce_field" }
             .description
 
-        assertTrue(description.contains("current class"))
+        assertTrue(description.contains("nearest containing class"))
+        assertTrue(description.contains("targetClassQualifiedName"))
         assertTrue(description.contains("exact source range"))
         assertTrue(description.contains("selected occurrence"))
         assertTrue(description.contains("private final"))

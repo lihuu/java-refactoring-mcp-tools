@@ -26,6 +26,7 @@ internal class IntroduceMemberOperation(
         pathInProject: String,
         range: SourceRange,
         preferredName: String,
+        targetClassQualifiedName: String? = null,
     ): String {
         return try {
             val nameIsValid = smartReadAction(project) {
@@ -40,7 +41,7 @@ internal class IntroduceMemberOperation(
 
             when (
                 val resolution = smartReadAction(project) {
-                    resolver.resolve(project, pathInProject, range)
+                    resolver.resolve(project, pathInProject, range, targetClassQualifiedName)
                 }
             ) {
                 is IntroduceMemberSelectionResolution.Failure -> McpRefactoringResult.failure(
@@ -49,9 +50,14 @@ internal class IntroduceMemberOperation(
                 ).toJson()
                 is IntroduceMemberSelectionResolution.Success -> {
                     val selection = resolution.selection
-                    val absoluteFilePath = smartReadAction(project) {
-                        selection.file.virtualFile.path
-                    }
+                    val (absoluteFilePath, resolvedTargetClassQualifiedName) =
+                        smartReadAction(project) {
+                            selection.file.virtualFile.path to (
+                                selection.targetClass.qualifiedName
+                                    ?: selection.targetClass.name
+                                    ?: "<anonymous>"
+                                )
+                        }
                     val result = executor.introduce(
                         project,
                         selection,
@@ -78,6 +84,7 @@ internal class IntroduceMemberOperation(
                         requestedFieldName = preferredName,
                         actualFieldName = result.actualFieldName,
                         fieldType = result.fieldType,
+                        targetClassQualifiedName = resolvedTargetClassQualifiedName,
                         summary = result.summary,
                     ).toJson()
                 }
@@ -110,6 +117,7 @@ internal class IntroduceMemberOperation(
         requestedFieldName: String,
         actualFieldName: String,
         fieldType: String,
+        targetClassQualifiedName: String,
         summary: String,
     ): McpRefactoringResult = when (profile) {
         IntroduceMemberProfile.Constant -> McpRefactoringResult.introduceConstantSuccess(
@@ -118,6 +126,7 @@ internal class IntroduceMemberOperation(
             requestedFieldName = requestedFieldName,
             actualFieldName = actualFieldName,
             fieldType = fieldType,
+            targetClassQualifiedName = targetClassQualifiedName,
             summary = summary,
         )
         IntroduceMemberProfile.InstanceFinalField -> McpRefactoringResult.introduceFieldSuccess(
@@ -126,6 +135,7 @@ internal class IntroduceMemberOperation(
             requestedFieldName = requestedFieldName,
             actualFieldName = actualFieldName,
             fieldType = fieldType,
+            targetClassQualifiedName = targetClassQualifiedName,
             summary = summary,
         )
     }

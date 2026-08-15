@@ -19,5 +19,12 @@ class IntroduceFieldOperation(
         pathInProject: String,
         range: SourceRange,
         preferredName: String,
-    ): String = delegate.execute(project, pathInProject, range, preferredName)
+        targetClassQualifiedName: String? = null,
+    ): String = delegate.execute(
+        project,
+        pathInProject,
+        range,
+        preferredName,
+        targetClassQualifiedName,
+    )
 }

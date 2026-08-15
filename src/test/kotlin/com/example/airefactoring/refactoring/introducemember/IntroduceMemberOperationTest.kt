@@ -55,6 +55,10 @@ class IntroduceMemberOperationTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals("BASE", obj.getValue("actualFieldName").jsonPrimitive.content)
         assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
         assertEquals(
+            "ConstantOperation",
+            obj.getValue("targetClassQualifiedName").jsonPrimitive.content,
+        )
+        assertEquals(
             listOf("private", "static", "final"),
             obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
         )
@@ -99,6 +103,10 @@ class IntroduceMemberOperationTest : LightJavaCodeInsightFixtureTestCase() {
         assertEquals("twelve", obj.getValue("actualFieldName").jsonPrimitive.content)
         assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
         assertEquals(
+            "FieldOperation",
+            obj.getValue("targetClassQualifiedName").jsonPrimitive.content,
+        )
+        assertEquals(
             listOf("private", "final"),
             obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
         )
@@ -108,6 +116,33 @@ class IntroduceMemberOperationTest : LightJavaCodeInsightFixtureTestCase() {
         )
         assertEquals(1, spy.times)
         assertEquals(IntroduceMemberProfile.InstanceFinalField, spy.lastProfile)
+    }
+
+    fun testExplicitEnclosingTargetFlowsThroughFacadeAndResult() {
+        val fileName = "ExplicitTargetOperation.java"
+        val range = validRange(
+            fileName,
+            "class ExplicitTargetOperation { class Inner { int value() { return 12; } } }",
+            "12",
+        )
+        val operation = IntroduceFieldOperation(executor = SpyExecutor())
+
+        val json = runOperation {
+            operation.execute(
+                project,
+                fileName,
+                range,
+                "twelve",
+                "ExplicitTargetOperation",
+            )
+        }
+        val obj = Json.parseToJsonElement(json).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals(
+            "ExplicitTargetOperation",
+            obj.getValue("targetClassQualifiedName").jsonPrimitive.content,
+        )
     }
 
     fun testInvalidJavaIdentifierUsesInvalidFieldNameWithoutResolving() {

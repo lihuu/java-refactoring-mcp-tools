@@ -175,6 +175,7 @@ class McpRefactoringResultTest : TestCase() {
             requestedFieldName = "MONTHS",
             actualFieldName = "MONTHS2",
             fieldType = "int",
+            targetClassQualifiedName = "example.A",
             summary = "Introduced constant 'MONTHS2'.",
         ).toJson()
         val obj = Json.parseToJsonElement(json).jsonObject
@@ -184,6 +185,7 @@ class McpRefactoringResultTest : TestCase() {
         assertEquals("MONTHS", obj.getValue("requestedFieldName").jsonPrimitive.content)
         assertEquals("MONTHS2", obj.getValue("actualFieldName").jsonPrimitive.content)
         assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
+        assertEquals("example.A", obj.getValue("targetClassQualifiedName").jsonPrimitive.content)
         assertEquals(
             listOf("private", "static", "final"),
             obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
@@ -204,6 +206,7 @@ class McpRefactoringResultTest : TestCase() {
                 requestedFieldName = "result",
                 actualFieldName = "result",
                 fieldType = "int",
+                targetClassQualifiedName = "example.A",
                 summary = "Introduced field 'result'.",
             ).toJson()
         ).jsonObject
@@ -213,6 +216,7 @@ class McpRefactoringResultTest : TestCase() {
         assertEquals("result", obj.getValue("requestedFieldName").jsonPrimitive.content)
         assertEquals("result", obj.getValue("actualFieldName").jsonPrimitive.content)
         assertEquals("int", obj.getValue("fieldType").jsonPrimitive.content)
+        assertEquals("example.A", obj.getValue("targetClassQualifiedName").jsonPrimitive.content)
         assertEquals(
             listOf("private", "final"),
             obj.getValue("fieldModifiers").jsonArray.map { it.jsonPrimitive.content },
@@ -277,6 +281,7 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(keys.contains("actualFieldName"))
         assertFalse(keys.contains("fieldType"))
         assertFalse(keys.contains("fieldModifiers"))
+        assertFalse(keys.contains("targetClassQualifiedName"))
         assertFalse(keys.contains("initializationPlace"))
     }
 
