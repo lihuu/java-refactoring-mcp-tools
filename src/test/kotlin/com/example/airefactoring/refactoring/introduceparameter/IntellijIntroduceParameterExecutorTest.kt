@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.introduceparameter
 import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.undo.UndoManager
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.TestDialog
@@ -73,10 +74,30 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         )
     }
 
+    fun testExpressionChangesOnlyTheSelectedOccurrenceInsideTheTargetMethod() {
+        val fixture = priceServiceFixture(body = "return rate * 2 + rate * 2;")
+        val selection = resolveExpression(fixture, "rate * 2", "firstDoubled")
+
+        runWithThrowingDialog {
+            runExecutor {
+                IntellijIntroduceParameterExecutor()
+                    .introduceParameter(project, selection, "firstDoubled")
+            }
+        }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+
+        val declaration = documentText(fixture.declarationPath)
+        assertTrue(declaration.contains("int priceFor(int rate, final int firstDoubled)"))
+        assertTrue(
+            "replace choice NO must leave the second same-method occurrence unchanged",
+            declaration.contains("return firstDoubled + rate * 2;"),
+        )
+    }
+
     // --- Step 2: local executor ---
 
     fun testIntroducesParameterFromLocalVariableRemovesDeclarationAndUpdatesCallers() {
-        val fixture = priceServiceFixture(body = "int doubled = rate * 2; return doubled;")
+        val fixture = priceServiceFixture(body = "int doubled = rate * 2; return doubled + doubled;")
         val selection = resolveLocalVariable(fixture, "doubled")
 
         val result = runWithThrowingDialog {
@@ -100,7 +121,7 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         assertFalse("the local declaration must be removed", declaration.contains("int doubled = rate * 2"))
         assertTrue(
             "every local read must become the parameter",
-            declaration.contains("return doubled;"),
+            declaration.contains("return doubled + doubled;"),
         )
         assertTrue(
             "caller one must receive the caller-context argument",
@@ -167,6 +188,67 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         }
     }
 
+    fun testSelectedMethodDoesNotRewriteSameFileDuplicateMethodAndOneUndoRestoresEverything() {
+        val fixture = priceServiceFixture(
+            duplicateMethod = "public int duplicatePriceFor(int rate) { return rate * 2; }",
+        )
+        val selection = resolveExpression(fixture, "rate * 2", "doubledRate")
+        val originals = fixture.affectedFiles.associateWith(::documentText)
+
+        runWithThrowingDialog {
+            runExecutor {
+                IntellijIntroduceParameterExecutor()
+                    .introduceParameter(project, selection, "doubledRate")
+            }
+        }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+
+        val declaration = documentText(fixture.declarationPath)
+        assertTrue(declaration.contains("int priceFor(int rate, final int doubledRate)"))
+        assertTrue(
+            "only the selected method may change; an IDEA method duplicate must remain untouched",
+            declaration.contains("int duplicatePriceFor(int rate) { return rate * 2; }"),
+        )
+
+        val undoManager = UndoManager.getInstance(project)
+        assertTrue("Introduce Parameter must be available as one global Undo", undoManager.isUndoAvailable(null))
+        val previousDialog = TestDialogManager.setTestDialog(TestDialog.OK)
+        try {
+            undoManager.undo(null)
+        } finally {
+            TestDialogManager.setTestDialog(previousDialog)
+        }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        originals.forEach { (path, original) ->
+            assertEquals(path, original, documentText(path))
+        }
+    }
+
+    fun testStaleSelectionFailsBeforeNativeMutation() {
+        val fixture = priceServiceFixture()
+        val selection = resolveExpression(fixture, "rate * 2", "doubledRate")
+        val declaration = document(fixture.declarationPath)
+        val sourceStart = declaration.text.indexOf("rate * 2")
+        WriteCommandAction.runWriteCommandAction(project) {
+            declaration.replaceString(sourceStart, sourceStart + "rate * 2".length, "rate * 3")
+        }
+        val beforeExecution = fixture.affectedFiles.associateWith(::documentText)
+
+        try {
+            runExecutor {
+                IntellijIntroduceParameterExecutor()
+                    .introduceParameter(project, selection, "doubledRate")
+            }
+            fail("expected stale selection to be rejected before the native processor runs")
+        } catch (e: IntroduceParameterPreparationException) {
+            assertTrue(e.message.orEmpty().contains("changed"))
+        }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        beforeExecution.forEach { (path, expected) ->
+            assertEquals(path, expected, documentText(path))
+        }
+    }
+
     // --- Step 6: injected post-mutation inspection failure ---
 
     fun testInjectedPostMutationFailureRollsBackEveryDocumentViaNativeUndo() {
@@ -174,7 +256,7 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         val selection = resolveExpression(fixture, "rate * 2", "doubledRate")
         val originals = fixture.affectedFiles.associateWith(::documentText)
         val failingExecutor = IntellijIntroduceParameterExecutor(
-            resultInspector = IntroduceParameterResultInspector { _, _, _, _, _, _ ->
+            resultInspector = IntroduceParameterResultInspector { _, _, _, _, _, _, _ ->
                 throw IllegalStateException("injected post-mutation failure")
             },
         )
@@ -198,7 +280,7 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         val selection = resolveLocalVariable(fixture, "doubled")
         val originals = fixture.affectedFiles.associateWith(::documentText)
         val failingExecutor = IntellijIntroduceParameterExecutor(
-            resultInspector = IntroduceParameterResultInspector { _, _, _, _, _, _ ->
+            resultInspector = IntroduceParameterResultInspector { _, _, _, _, _, _, _ ->
                 throw IllegalStateException("injected post-mutation failure")
             },
         )
@@ -265,6 +347,7 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
      */
     private fun priceServiceFixture(
         body: String = "return rate * 2;",
+        duplicateMethod: String? = null,
     ): ExecutorFixture {
         val declarationPath = "ParamService.java"
         val callerOnePath = "ParamCallerOne.java"
@@ -274,6 +357,7 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
             """
                 public class ParamService {
                     public int priceFor(int rate) { $body }
+                    ${duplicateMethod.orEmpty()}
                 }
             """.trimIndent(),
         )

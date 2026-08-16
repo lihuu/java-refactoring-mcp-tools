@@ -8,7 +8,6 @@ import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import java.nio.file.Path
 import java.util.concurrent.CancellationException
 
 /**
@@ -52,9 +51,7 @@ class IntroduceParameterOperation(
                 ).toJson()
                 is IntroduceParameterSelectionResolution.Success -> {
                     val selection = resolution.selection
-                    val filePath = smartReadAction(project) {
-                        projectRelativePath(project, selection.file.virtualFile.path)
-                    }
+                    val filePath = selection.sourceDocumentPath
                     val result = executor.introduceParameter(project, selection, parameterName)
                     McpRefactoringResult.introduceParameterSuccess(
                         projectBasePath = project.basePath ?: "",
@@ -92,12 +89,4 @@ class IntroduceParameterOperation(
         }
     }
 
-    private fun projectRelativePath(project: Project, absolutePath: String): String {
-        val base = project.basePath ?: return absolutePath
-        return Path.of(base)
-            .toAbsolutePath()
-            .normalize()
-            .relativize(Path.of(absolutePath).toAbsolutePath().normalize())
-            .toString()
-    }
 }

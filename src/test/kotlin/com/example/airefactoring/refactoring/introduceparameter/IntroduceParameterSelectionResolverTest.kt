@@ -54,9 +54,9 @@ class IntroduceParameterSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
         val selection = (result as IntroduceParameterSelectionResolution.Success).selection
         assertEquals(IntroduceParameterSourceKind.EXPRESSION, selection.sourceKind)
-        assertEquals("count * 2", selection.expression?.text)
-        assertEquals("int", selection.sourceType.canonicalText)
-        assertEquals("total", selection.method.name)
+        assertEquals("count * 2", selection.expressionPointer?.element?.text)
+        assertEquals("int", selection.sourceTypeCanonicalText)
+        assertEquals("total", selection.methodPointer.element?.name)
         assertEquals(listOf("ExpressionTarget.java"), selection.affectedFiles)
     }
 
@@ -73,9 +73,9 @@ class IntroduceParameterSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
         val selection = (result as IntroduceParameterSelectionResolution.Success).selection
         assertEquals(IntroduceParameterSourceKind.LOCAL_VARIABLE, selection.sourceKind)
-        assertEquals("doubled", selection.localVariable?.name)
-        assertEquals("int", selection.sourceType.canonicalText)
-        assertEquals("total", selection.method.name)
+        assertEquals("doubled", selection.localVariablePointer?.element?.name)
+        assertEquals("int", selection.sourceTypeCanonicalText)
+        assertEquals("total", selection.methodPointer.element?.name)
     }
 
     fun testResolvesLocalReadReferenceAsLocalVariableKind() {
@@ -94,8 +94,8 @@ class IntroduceParameterSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
         val selection = (result as IntroduceParameterSelectionResolution.Success).selection
         assertEquals(IntroduceParameterSourceKind.LOCAL_VARIABLE, selection.sourceKind)
-        assertEquals("doubled", selection.localVariable?.name)
-        assertEquals("int", selection.sourceType.canonicalText)
+        assertEquals("doubled", selection.localVariablePointer?.element?.name)
+        assertEquals("int", selection.sourceTypeCanonicalText)
     }
 
     // --- Step: rejections ---
@@ -208,6 +208,36 @@ class IntroduceParameterSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         requireFailure(
             resolver.resolve(project, "ConstructorTarget.java", range, "factor"),
             McpRefactoringErrorCode.UNSUPPORTED_METHOD,
+        )
+        assertEquals(original, myFixture.editor.document.text)
+    }
+
+    fun testVarargsMethodIsRejectedWithoutSourceMutation() {
+        val range = configureMarkedFile(
+            "VarargsTarget.java",
+            "class VarargsTarget { int total(int seed, String... labels) { return <selection>seed * 2</selection>; } }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(project, "VarargsTarget.java", range, "multiplier"),
+            McpRefactoringErrorCode.UNSUPPORTED_METHOD,
+        )
+        assertEquals(original, myFixture.editor.document.text)
+    }
+
+    fun testMethodReferenceUsageIsRejectedWithoutMutation() {
+        val range = configureMarkedFile(
+            "MethodReferenceTarget.java",
+            "class MethodReferenceTarget { int total(int seed) { return <selection>seed * 2</selection>; } } " +
+                "class MethodReferenceCaller { java.util.function.IntUnaryOperator operation = " +
+                "new MethodReferenceTarget()::total; }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(project, "MethodReferenceTarget.java", range, "multiplier"),
+            McpRefactoringErrorCode.UNSUPPORTED_USAGE,
         )
         assertEquals(original, myFixture.editor.document.text)
     }

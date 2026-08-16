@@ -1,7 +1,6 @@
 package com.example.airefactoring.refactoring.introduceparameter
 
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.command.UndoConfirmationPolicy
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -10,8 +9,6 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiExpression
 import com.intellij.psi.PsiLocalVariable
-import com.intellij.psi.PsiMethodCallExpression
-import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.introduceParameter.IntroduceParameterProcessor
 import com.intellij.refactoring.introduceVariable.IntroduceVariableBase
 import com.intellij.usageView.UsageInfo
@@ -26,10 +23,11 @@ import java.nio.file.Path
  * [IntroduceParameterProcessor], headlessly and with every UI choice fixed by the source kind.
  *
  * The whole mutation is recorded as ONE global native command (the processor owns it), runs on the
- * EDT, and afterwards only the affected documents are saved. Every affected document is snapshotted
- * at mutation time; if post-mutation inspection or save fails, the executor rolls the mutation back
- * through native [com.intellij.openapi.command.undo.UndoManager] and verifies every document was
- * restored exactly before rethrowing.
+ * EDT, and afterwards only the affected documents are saved. The resolver's immutable document
+ * snapshots are re-validated immediately before mutation; if post-mutation inspection or save
+ * fails, the executor rolls the mutation back through native
+ * [com.intellij.openapi.command.undo.UndoManager] and verifies every document was restored exactly
+ * before rethrowing.
  */
 class IntellijIntroduceParameterExecutor internal constructor(
     private val resultInspector: IntroduceParameterResultInspector = DefaultIntroduceParameterResultInspector,
@@ -40,27 +38,17 @@ class IntellijIntroduceParameterExecutor internal constructor(
         selection: IntroduceParameterSelection,
         parameterName: String,
     ): IntroduceParameterExecutionResult {
-        // Compute the caller count from the pristine method BEFORE mutation, so PSI staleness after
-        // the native rewrite cannot skew the reported result. This must run OFF the EDT:
-        // countExternalCallSites resolves method references, whose stub-index lookup trips the
-        // platform's "Slow operations are prohibited on EDT" guard. The resolver already enumerated
-        // every direct call site under a read action; the count is re-derived here in the same way.
-        val updatedCallSiteCount = smartReadAction(project) {
-            countExternalCallSites(selection)
-        }
         return withContext(Dispatchers.EDT) {
-            requireValidSource(selection)
-            val method = selection.method
+            val preparedSource = requireCurrentSource(project, selection)
+            val method = preparedSource.method
 
             // Compute the target parameter position from the pristine method before mutation.
             val parameterPosition = method.parameterList.parametersCount + 1
 
-            // Snapshot every affected document AT MUTATION TIME, on the EDT, held as smart pointers so
-            // a later rollback can compare exact text.
-            val documents = snapshotAffectedDocuments(project, selection.affectedFiles)
+            val documents = requireCurrentDocuments(project, selection)
 
             val processor = try {
-                buildProcessor(project, selection, parameterName)
+                buildProcessor(project, selection, preparedSource, parameterName)
             } catch (e: IntroduceParameterPreparationException) {
                 throw e
             }
@@ -74,9 +62,10 @@ class IntellijIntroduceParameterExecutor internal constructor(
                     selection,
                     parameterName,
                     method.name,
-                    selection.sourceType.canonicalText,
+                    selection.sourceTypeCanonicalText,
                     parameterPosition,
-                    updatedCallSiteCount,
+                    selection.updatedCallSiteCount,
+                    documents.first { it.path == selection.sourceDocumentPath }.document,
                 )
                 saveAffectedDocuments(project, selection.affectedFiles, documents)
                 result
@@ -87,24 +76,62 @@ class IntellijIntroduceParameterExecutor internal constructor(
         }
     }
 
-    private fun requireValidSource(selection: IntroduceParameterSelection) {
-        val expression = selection.expression
-        val localVariable = selection.localVariable
-        val expressionValid = expression == null || expression.isValid
-        val localValid = localVariable == null || localVariable.isValid
-        if (!selection.method.isValid || !expressionValid || !localValid) {
+    private data class PreparedSource(
+        val method: com.intellij.psi.PsiMethod,
+        val expression: PsiExpression?,
+        val localVariable: PsiLocalVariable?,
+        val sourceType: com.intellij.psi.PsiType,
+    )
+
+    /**
+     * De-references the resolver's smart pointers only on the EDT and proves that the method,
+     * selected source, and every document are exactly the version that was prepared under read.
+     */
+    private fun requireCurrentSource(
+        project: Project,
+        selection: IntroduceParameterSelection,
+    ): PreparedSource {
+        val method = selection.methodPointer.element
+        if (method == null || !method.isValid || methodSignature(method) != selection.methodSignature) {
             throw IntroduceParameterPreparationException(
                 "The introduce-parameter source changed before the native refactoring could run.",
             )
         }
+        val source = when (selection.sourceKind) {
+            IntroduceParameterSourceKind.EXPRESSION -> {
+                val expression = selection.expressionPointer?.element
+                if (expression == null || !expression.isValid) null
+                else PreparedSource(method, expression, null, expression.type ?: return staleSelection())
+            }
+
+            IntroduceParameterSourceKind.LOCAL_VARIABLE -> {
+                val local = selection.localVariablePointer?.element
+                if (local == null || !local.isValid) null
+                else PreparedSource(method, null, local, local.type)
+            }
+        } ?: return staleSelection()
+        if (
+            source.sourceType.canonicalText != selection.sourceTypeCanonicalText ||
+            (source.expression?.text ?: source.localVariable?.text) != selection.sourceText ||
+            source.method.containingFile.virtualFile.path != Path.of(project.basePath ?: "")
+                .resolve(selection.sourceDocumentPath).normalize().toString()
+        ) {
+            return staleSelection()
+        }
+        return source
     }
+
+    private fun staleSelection(): Nothing = throw IntroduceParameterPreparationException(
+        "The introduce-parameter source changed before the native refactoring could run.",
+    )
 
     private fun buildProcessor(
         project: Project,
         selection: IntroduceParameterSelection,
+        preparedSource: PreparedSource,
         parameterName: String,
     ): IntroduceParameterProcessor {
-        val method = selection.method
+        val method = preparedSource.method
         val initializer: PsiExpression
         val expressionToSearch: PsiExpression?
         val localVariable: PsiLocalVariable?
@@ -113,7 +140,7 @@ class IntellijIntroduceParameterExecutor internal constructor(
 
         when (selection.sourceKind) {
             IntroduceParameterSourceKind.EXPRESSION -> {
-                val expression = selection.expression
+                val expression = preparedSource.expression
                     ?: throw IntroduceParameterPreparationException(
                         "An expression source is missing its expression.",
                     )
@@ -125,7 +152,7 @@ class IntellijIntroduceParameterExecutor internal constructor(
             }
 
             IntroduceParameterSourceKind.LOCAL_VARIABLE -> {
-                val local = selection.localVariable
+                val local = preparedSource.localVariable
                     ?: throw IntroduceParameterPreparationException(
                         "A local-variable source is missing its local variable.",
                     )
@@ -155,7 +182,7 @@ class IntellijIntroduceParameterExecutor internal constructor(
             true,
             false,
             false,
-            selection.sourceType,
+            preparedSource.sourceType,
             IntArrayList(),
         )
     }
@@ -201,7 +228,14 @@ class IntellijIntroduceParameterExecutor internal constructor(
         undoManager.undo(null)
         PsiDocumentManager.getInstance(project).commitAllDocuments()
 
-        val mismatched = documents.filter { it.document.text != it.originalText }
+        val fileDocumentManager = FileDocumentManager.getInstance()
+        documents.filter { !it.originallyUnsaved }.forEach { affected ->
+            fileDocumentManager.saveDocument(affected.document)
+        }
+        val mismatched = documents.filter {
+            it.document.text != it.originalText ||
+                fileDocumentManager.isDocumentUnsaved(it.document) != it.originallyUnsaved
+        }
         if (mismatched.isNotEmpty()) {
             throw rollbackFailure(
                 "Undo did not restore every affected document exactly: " +
@@ -217,31 +251,6 @@ class IntellijIntroduceParameterExecutor internal constructor(
             cause,
         )
 
-    /** Counts the direct call sites of [selection.method] across the affected files. */
-    private fun countExternalCallSites(selection: IntroduceParameterSelection): Int {
-        val method = selection.method
-        val psiManager = com.intellij.psi.PsiManager.getInstance(method.project)
-        val fileSystem = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-        // A project without a base path cannot resolve project-relative paths; report 0 rather than
-        // a semantic-lie count (this never happens for a real project, and the snapshot/save helpers
-        // below degrade the same way).
-        val basePath = method.project.basePath ?: return 0
-        var count = 0
-        selection.affectedFiles.forEach { path ->
-            val virtualFile = fileSystem.findFileByPath(Path.of(basePath).resolve(path).normalize().toString())
-                ?: return@forEach
-            val file = psiManager.findFile(virtualFile) as? com.intellij.psi.PsiJavaFile
-                ?: return@forEach
-            PsiTreeUtil.findChildrenOfType(file, PsiMethodCallExpression::class.java).forEach { call ->
-                val reference = call.methodExpression
-                if (psiManager.areElementsEquivalent(reference.resolve(), method)) {
-                    count++
-                }
-            }
-        }
-        return count
-    }
-
     private data class AffectedDocument(
         val path: String,
         val document: Document,
@@ -249,24 +258,42 @@ class IntellijIntroduceParameterExecutor internal constructor(
         val originallyUnsaved: Boolean,
     )
 
-    private fun snapshotAffectedDocuments(
+    private fun requireCurrentDocuments(
         project: Project,
-        affectedFiles: List<String>,
+        selection: IntroduceParameterSelection,
     ): List<AffectedDocument> {
-        val basePath = project.basePath ?: return emptyList()
+        val basePath = project.basePath ?: return staleSelection()
         val fileDocumentManager = FileDocumentManager.getInstance()
         val localFileSystem = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-        return affectedFiles.mapNotNull { relativePath ->
+        if (selection.documentSnapshots.map { it.path } != selection.affectedFiles) {
+            return staleSelection()
+        }
+        return selection.documentSnapshots.map { snapshot ->
+            val relativePath = snapshot.path
             val absolutePath = Path.of(basePath).resolve(relativePath).normalize().toString()
-            val virtualFile = localFileSystem.findFileByPath(absolutePath) ?: return@mapNotNull null
-            val document = fileDocumentManager.getDocument(virtualFile) ?: return@mapNotNull null
+            val virtualFile = localFileSystem.findFileByPath(absolutePath) ?: return staleSelection()
+            val document = fileDocumentManager.getDocument(virtualFile) ?: return staleSelection()
+            if (
+                document.text != snapshot.text ||
+                fileDocumentManager.isDocumentUnsaved(document) != snapshot.wasUnsaved
+            ) {
+                return staleSelection()
+            }
             AffectedDocument(
                 path = relativePath,
                 document = document,
-                originalText = document.text,
-                originallyUnsaved = fileDocumentManager.isDocumentUnsaved(document),
+                originalText = snapshot.text,
+                originallyUnsaved = snapshot.wasUnsaved,
             )
         }
+    }
+
+    private fun methodSignature(method: com.intellij.psi.PsiMethod): String = buildString {
+        append(method.name)
+        append('(')
+        append(method.parameterList.parameters.joinToString(",") { it.type.canonicalText })
+        append("):")
+        append(method.returnType?.canonicalText.orEmpty())
     }
 }
 
@@ -279,6 +306,7 @@ internal fun interface IntroduceParameterResultInspector {
         parameterType: String,
         parameterPosition: Int,
         updatedCallSiteCount: Int,
+        sourceDocument: Document,
     ): IntroduceParameterExecutionResult
 }
 
@@ -290,10 +318,11 @@ private object DefaultIntroduceParameterResultInspector : IntroduceParameterResu
         parameterType: String,
         parameterPosition: Int,
         updatedCallSiteCount: Int,
+        sourceDocument: Document,
     ): IntroduceParameterExecutionResult {
         // Post-mutation verification: the native processor must have introduced the parameter into
         // the declaration document. This reads the live document (already committed after run()).
-        if (!selection.document.text.contains(parameterName)) {
+        if (!sourceDocument.text.contains(parameterName)) {
             throw IntroduceParameterPreparationException(
                 "Native Introduce Parameter did not add parameter '$parameterName' to '$methodName'.",
             )
@@ -352,6 +381,8 @@ private class HeadlessIntroduceParameterProcessor(
 ) {
     override fun getUndoConfirmationPolicy(): UndoConfirmationPolicy =
         UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION
+
+    override fun isReplaceDuplicates(): Boolean = false
 
     /**
      * The native [IntroduceParameterProcessor.preprocessUsages] funnels every conflict it detects

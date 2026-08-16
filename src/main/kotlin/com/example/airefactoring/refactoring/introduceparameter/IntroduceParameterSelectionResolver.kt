@@ -7,6 +7,7 @@ import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.validator.NameValidator
 import com.example.airefactoring.validator.ValidationResult
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
@@ -22,6 +23,7 @@ import com.intellij.psi.PsiResourceVariable
 import com.intellij.psi.PsiType
 import com.intellij.psi.PsiTypes
 import com.intellij.psi.PsiVariable
+import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.OverridingMethodsSearch
 import com.intellij.psi.search.searches.ReferencesSearch
@@ -180,7 +182,6 @@ class IntroduceParameterSelectionResolver(
             )
         }
         val type = variable.type
-            ?: return unsupported("The local variable has no known type.")
         if (type == PsiTypes.voidType()) {
             return unsupported("A void-typed local variable cannot back a parameter.")
         }
@@ -228,20 +229,30 @@ class IntroduceParameterSelectionResolver(
             if (rejection != null) return rejection
         }
 
+        val affectedFiles = affected.paths.distinct().sorted()
+        val snapshots = snapshotAffectedDocuments(project, affectedFiles)
+            ?: return failure(
+                McpRefactoringErrorCode.UNSUPPORTED_USAGE,
+                "Every affected file must have a readable document before refactoring.",
+            )
+        val pointerManager = SmartPointerManager.getInstance(project)
         return IntroduceParameterSelectionResolution.Success(
             IntroduceParameterSelection(
-                file = file,
-                document = document,
                 sourceKind = if (localVariable != null) {
                     IntroduceParameterSourceKind.LOCAL_VARIABLE
                 } else {
                     IntroduceParameterSourceKind.EXPRESSION
                 },
-                method = method,
-                sourceType = sourceType,
-                expression = expression,
-                localVariable = localVariable,
-                affectedFiles = affected.paths.distinct().sorted(),
+                methodPointer = pointerManager.createSmartPsiElementPointer(method),
+                expressionPointer = expression?.let(pointerManager::createSmartPsiElementPointer),
+                localVariablePointer = localVariable?.let(pointerManager::createSmartPsiElementPointer),
+                sourceTypeCanonicalText = sourceType.canonicalText,
+                sourceDocumentPath = projectRelativePath(project, file.virtualFile.path),
+                methodSignature = methodSignature(method),
+                sourceText = expression?.text ?: localVariable!!.text,
+                updatedCallSiteCount = affected.callSiteCount,
+                affectedFiles = affectedFiles,
+                documentSnapshots = snapshots,
             ),
         )
     }
@@ -268,6 +279,7 @@ class IntroduceParameterSelectionResolver(
 
     private class AffectedFiles {
         val paths = mutableListOf<String>()
+        var callSiteCount: Int = 0
     }
 
     /**
@@ -304,6 +316,7 @@ class IntroduceParameterSelectionResolver(
             return unsupportedUsage("Every call site must be writable project content.")
         }
         affected.paths += projectRelativePath(project, callFile.virtualFile.path)
+        affected.callSiteCount++
         return null
     }
 
@@ -318,6 +331,12 @@ class IntroduceParameterSelectionResolver(
             return failure(
                 McpRefactoringErrorCode.UNSUPPORTED_METHOD,
                 "A method without a writable body is not supported.",
+            )
+        }
+        if (method.isVarArgs) {
+            return failure(
+                McpRefactoringErrorCode.UNSUPPORTED_METHOD,
+                "Varargs methods are not supported because V1 always appends the new parameter.",
             )
         }
         val containingClass = method.containingClass
@@ -385,6 +404,34 @@ class IntroduceParameterSelectionResolver(
         code,
         message,
     )
+
+    private fun snapshotAffectedDocuments(
+        project: Project,
+        affectedFiles: List<String>,
+    ): List<IntroduceParameterDocumentSnapshot>? {
+        val basePath = project.basePath ?: return null
+        val fileDocumentManager = FileDocumentManager.getInstance()
+        val fileSystem = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+        return affectedFiles.map { path ->
+            val virtualFile = fileSystem.findFileByPath(
+                Path.of(basePath).resolve(path).normalize().toString(),
+            ) ?: return null
+            val affectedDocument = fileDocumentManager.getDocument(virtualFile) ?: return null
+            IntroduceParameterDocumentSnapshot(
+                path = path,
+                text = affectedDocument.text,
+                wasUnsaved = fileDocumentManager.isDocumentUnsaved(affectedDocument),
+            )
+        }
+    }
+
+    private fun methodSignature(method: PsiMethod): String = buildString {
+        append(method.name)
+        append('(')
+        append(method.parameterList.parameters.joinToString(",") { it.type.canonicalText })
+        append("):")
+        append(method.returnType?.canonicalText.orEmpty())
+    }
 
     private fun projectRelativePath(project: Project, absolutePath: String): String {
         val base = project.basePath ?: return absolutePath

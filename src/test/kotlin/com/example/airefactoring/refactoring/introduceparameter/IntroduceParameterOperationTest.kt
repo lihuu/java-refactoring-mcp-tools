@@ -2,7 +2,9 @@ package com.example.airefactoring.refactoring.introduceparameter
 
 import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProcessCanceledException
@@ -16,6 +18,8 @@ import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.dispatchAllEventsInIdeEventQueue
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
@@ -182,6 +186,21 @@ class IntroduceParameterOperationTest : LightJavaCodeInsightFixtureTestCase() {
         assertFailureCode(json, "PREPARE_FAILED")
     }
 
+    fun testStaleResolvedSelectionMapsToPrepareFailedWithoutNativeMutation() {
+        val range = expressionRange(SERVICE_FILE, SERVICE_SOURCE, "rate * 3")
+        val operation = IntroduceParameterOperation(
+            executor = StaleSelectionExecutor(),
+        )
+
+        val json = runOperation {
+            operation.execute(project, SERVICE_FILE, range, "multiplier")
+        }
+
+        assertFailureCode(json, "PREPARE_FAILED")
+        assertTrue(document(SERVICE_FILE).text.contains("return rate * 4;"))
+        assertFalse("the native processor must not run after the source changes", document(SERVICE_FILE).text.contains("multiplier"))
+    }
+
     fun testUnexpectedFailureMapsToRefactoringFailed() {
         val range = expressionRange(SERVICE_FILE, SERVICE_SOURCE, "rate * 3")
         val operation = IntroduceParameterOperation(
@@ -323,6 +342,26 @@ class IntroduceParameterOperationTest : LightJavaCodeInsightFixtureTestCase() {
             selection: IntroduceParameterSelection,
             parameterName: String,
         ): IntroduceParameterExecutionResult = throw throwable
+    }
+
+    /** Changes the resolver's source document after handoff, then delegates to the real executor. */
+    private inner class StaleSelectionExecutor : IntroduceParameterExecutor {
+        override suspend fun introduceParameter(
+            project: Project,
+            selection: IntroduceParameterSelection,
+            parameterName: String,
+        ): IntroduceParameterExecutionResult {
+            withContext(Dispatchers.EDT) {
+                val document = document(selection.sourceDocumentPath)
+                val sourceStart = document.text.indexOf("rate * 3")
+                check(sourceStart >= 0) { "fixture source is missing" }
+                WriteCommandAction.runWriteCommandAction(project) {
+                    document.replaceString(sourceStart, sourceStart + "rate * 3".length, "rate * 4")
+                }
+            }
+            return IntellijIntroduceParameterExecutor()
+                .introduceParameter(project, selection, parameterName)
+        }
     }
 
     private companion object {
