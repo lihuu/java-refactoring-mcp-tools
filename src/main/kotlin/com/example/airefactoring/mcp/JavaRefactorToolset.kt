@@ -6,6 +6,7 @@ import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperatio
 import com.example.airefactoring.refactoring.inlinevariable.InlineVariableOperation
 import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOperation
 import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
+import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -21,6 +22,7 @@ class JavaRefactorToolset(
     private val inlineVariableOperation: InlineVariableOperation = InlineVariableOperation(),
     private val introduceConstantOperation: IntroduceConstantOperation = IntroduceConstantOperation(),
     private val introduceFieldOperation: IntroduceFieldOperation = IntroduceFieldOperation(),
+    private val introduceParameterOperation: IntroduceParameterOperation = IntroduceParameterOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -140,6 +142,22 @@ class JavaRefactorToolset(
         targetClassQualifiedName,
     )
 
+    @McpTool
+    @McpDescription(INTRODUCE_PARAMETER_DESCRIPTION)
+    suspend fun java_introduce_parameter(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line") startLine: Int,
+        @McpDescription("1-based inclusive start column") startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position") endLine: Int,
+        @McpDescription("1-based exclusive end column") endColumn: Int,
+        @McpDescription("Agent-selected preferred Java parameter name") parameterName: String,
+    ): String = introduceParameterOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+        parameterName,
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -228,5 +246,22 @@ class JavaRefactorToolset(
                 "mutation as a fallback when the native refactoring refuses the expression. " +
                 "Returns JSON with ok=true on success or ok=false with a stable error code on " +
                 "failure."
+
+        const val INTRODUCE_PARAMETER_DESCRIPTION =
+            "Introduces one exact Java expression or local variable as one new parameter of its " +
+                "enclosing method using IntelliJ's native Introduce Parameter refactoring. The " +
+                "new parameter is appended after every existing parameter, and every call site is " +
+                "updated from the selected source: the affected callers are derived natively from " +
+                "the selected source, never guessed by the agent. This tool is not the general " +
+                "Change Signature tool; it only adds one parameter from one selected expression or " +
+                "local variable. Read the containing method and all callers, analyze the proposed " +
+                "signature change, present the change to the user, and call only after waiting for " +
+                "user approval. Re-read every returned affectedFiles entry and run diagnostics, " +
+                "build, and tests after success. Never use direct text edits, patches, whole-file " +
+                "rewrites, or direct PSI mutation as a fallback when the native refactoring " +
+                "refuses the selection. The target is a project-relative Java file path and a " +
+                "1-based source range with an inclusive start and exclusive end (start inclusive, " +
+                "end exclusive). The parameter name must be a valid Java identifier. Returns JSON " +
+                "with ok=true on success or ok=false with a stable error code on failure."
     }
 }

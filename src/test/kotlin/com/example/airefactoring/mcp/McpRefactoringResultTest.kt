@@ -229,6 +229,146 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testIntroduceParameterSuccessContainsSourceKindAndParameterFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.introduceParameterSuccess(
+                projectBasePath = "/project",
+                filePath = "src/IpOpService.java",
+                methodName = "opPrice",
+                parameterName = "multiplier",
+                parameterType = "int",
+                parameterPosition = 2,
+                sourceKind = "EXPRESSION",
+                updatedCallSiteCount = 2,
+                affectedFiles = listOf("IpOpCallerOne.java", "IpOpCallerTwo.java", "IpOpService.java"),
+                summary = "Introduced parameter 'multiplier' to 'opPrice' and updated 2 call site(s).",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_introduce_parameter", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/IpOpService.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("opPrice", obj.getValue("methodName").jsonPrimitive.content)
+        assertEquals("multiplier", obj.getValue("parameterName").jsonPrimitive.content)
+        assertEquals("int", obj.getValue("parameterType").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("parameterPosition").jsonPrimitive.int)
+        assertEquals("EXPRESSION", obj.getValue("sourceKind").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("updatedCallSiteCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("IpOpCallerOne.java", "IpOpCallerTwo.java", "IpOpService.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            "Introduced parameter 'multiplier' to 'opPrice' and updated 2 call site(s).",
+            obj.getValue("summary").jsonPrimitive.content,
+        )
+        assertFalse(obj.containsKey("code"))
+        assertFalse(
+            "the introduce-parameter envelope must not carry Change Signature metadata",
+            obj.containsKey("defaultCallSiteExpression"),
+        )
+    }
+
+    fun testIntroduceParameterSuccessAcceptsLocalVariableSourceKind() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.introduceParameterSuccess(
+                projectBasePath = "/project",
+                filePath = "src/IpOpLocal.java",
+                methodName = "opPrice",
+                parameterName = "doubled",
+                parameterType = "int",
+                parameterPosition = 2,
+                sourceKind = "LOCAL_VARIABLE",
+                updatedCallSiteCount = 0,
+                affectedFiles = listOf("IpOpLocal.java"),
+                summary = "Introduced parameter 'doubled' to 'opPrice' and updated 0 call site(s).",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("LOCAL_VARIABLE", obj.getValue("sourceKind").jsonPrimitive.content)
+        assertEquals(0, obj.getValue("updatedCallSiteCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("IpOpLocal.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    fun testSuccessShapesOtherThanIntroduceParameterOmitSourceKind() {
+        val shapes = listOf(
+            Json.parseToJsonElement(
+                McpRefactoringResult.extractMethodSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    methodName = "m",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.introduceVariableSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    requestedVariableName = "v",
+                    actualVariableName = "v1",
+                    variableType = "int",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.inlineVariableSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    variableName = "v",
+                    inlinedOccurrenceCount = 1,
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.changeSignatureAddParameterSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    methodName = "m",
+                    parameterName = "p",
+                    parameterType = "int",
+                    parameterPosition = 1,
+                    defaultCallSiteExpression = "\"!\"",
+                    updatedCallSiteCount = 2,
+                    affectedFiles = listOf("A.java"),
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.introduceConstantSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    requestedFieldName = "C",
+                    actualFieldName = "C1",
+                    fieldType = "int",
+                    targetClassQualifiedName = "example.A",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+            Json.parseToJsonElement(
+                McpRefactoringResult.introduceFieldSuccess(
+                    projectBasePath = "/p",
+                    filePath = "A.java",
+                    requestedFieldName = "f",
+                    actualFieldName = "f",
+                    fieldType = "int",
+                    targetClassQualifiedName = "example.A",
+                    summary = "s",
+                ).toJson()
+            ).jsonObject,
+        )
+        shapes.forEach { obj ->
+            assertFalse(
+                "sourceKind must be populated only by the introduce-parameter envelope",
+                obj.containsKey("sourceKind"),
+            )
+        }
+    }
+
     fun testExistingSuccessShapesOmitAllNewMemberFields() {
         val shapes = listOf(
             Json.parseToJsonElement(

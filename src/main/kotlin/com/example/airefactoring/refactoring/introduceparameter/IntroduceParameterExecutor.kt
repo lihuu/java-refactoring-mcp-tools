@@ -36,3 +36,9 @@ class IntroduceParameterPreparationException(
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
+
+/** Thrown when the native refactoring reports a conflict that cannot be resolved headlessly. */
+class IntroduceParameterConflictException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

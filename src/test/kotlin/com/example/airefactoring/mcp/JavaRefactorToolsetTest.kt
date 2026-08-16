@@ -61,7 +61,46 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_inline_variable missing", "java_inline_variable" in names)
         assertTrue("java_introduce_constant missing", "java_introduce_constant" in names)
         assertTrue("java_introduce_field missing", "java_introduce_field" in names)
+        assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testIntroduceParameterSchemaContainsExactlySixDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_parameter" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "parameterName",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testIntroduceParameterDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_parameter" }
+            .description
+
+        assertTrue(description.contains("derived natively from the selected source"))
+        assertTrue(description.contains("not the general Change Signature"))
+        assertTrue(description.contains("waiting for user approval"))
+        assertTrue(description.contains("affectedFiles"))
+        assertTrue(description.contains("Never use direct text edits"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("start inclusive, end exclusive"))
+        assertFalse(
+            "the introduce-parameter description must not route the agent to the Change Signature tool",
+            description.contains("java_change_signature"),
+        )
     }
 
     fun testIntroduceConstantSchemaContainsOptionalTargetClassArgument() {
