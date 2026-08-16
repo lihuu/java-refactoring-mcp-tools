@@ -79,6 +79,7 @@ class IntroduceParameterSelectionResolver(
                     target.file,
                     target.document,
                     resolved,
+                    parameterName,
                 )
                 is PsiField -> return unsupportedVariable(
                     "The selected field '$resolved.name' cannot back an introduced parameter.",
@@ -92,6 +93,7 @@ class IntroduceParameterSelectionResolver(
                     target.document,
                     expression,
                     exactRange,
+                    parameterName,
                 )
             }
         }
@@ -99,7 +101,13 @@ class IntroduceParameterSelectionResolver(
         // Otherwise: a local variable declaration name selected exactly.
         val variable = findVariableDeclarationAtRange(file, exactRange)
         if (variable is PsiLocalVariable) {
-            return buildLocalVariableSelection(project, target.file, target.document, variable)
+            return buildLocalVariableSelection(
+                project,
+                target.file,
+                target.document,
+                variable,
+                parameterName,
+            )
         }
         when (variable) {
             is PsiField -> return unsupportedVariable(
@@ -122,6 +130,7 @@ class IntroduceParameterSelectionResolver(
         document: Document,
         expression: PsiExpression,
         exactRange: TextRange,
+        parameterName: String,
     ): IntroduceParameterSelectionResolution {
         if (expression.textRange != exactRange) {
             return failure(
@@ -143,7 +152,7 @@ class IntroduceParameterSelectionResolver(
                 McpRefactoringErrorCode.NO_TARGET_METHOD,
                 "The selected expression is not inside a Java method.",
             )
-        return finish(project, file, document, method, type, expression, null)
+        return finish(project, file, document, method, type, expression, null, parameterName)
     }
 
     private fun buildLocalVariableSelection(
@@ -151,6 +160,7 @@ class IntroduceParameterSelectionResolver(
         file: PsiJavaFile,
         document: Document,
         variable: PsiLocalVariable,
+        parameterName: String,
     ): IntroduceParameterSelectionResolution {
         if (variable is PsiResourceVariable) {
             return unsupported("Resource variables are not supported.")
@@ -179,7 +189,7 @@ class IntroduceParameterSelectionResolver(
                 McpRefactoringErrorCode.NO_TARGET_METHOD,
                 "The local variable is not inside a Java method.",
             )
-        return finish(project, file, document, method, type, null, variable)
+        return finish(project, file, document, method, type, null, variable, parameterName)
     }
 
     private fun finish(
@@ -190,9 +200,23 @@ class IntroduceParameterSelectionResolver(
         sourceType: PsiType,
         expression: PsiExpression?,
         localVariable: PsiLocalVariable?,
+        parameterName: String,
     ): IntroduceParameterSelectionResolution {
         val methodRejection = validateMethod(project, method)
         if (methodRejection != null) return methodRejection
+
+        // The MCP contract rejects a name that collides with an existing parameter or any local
+        // that survives the refactoring: the name is agent-selected semantic intent, and an implicit
+        // native rename would silently change it. The lifted source local is removed by the native
+        // refactoring, so it alone may be lifted under its own name.
+        val conflictingName = conflictingVariableName(method, localVariable, parameterName)
+        if (conflictingName != null) {
+            return failure(
+                McpRefactoringErrorCode.INVALID_PARAMETER_NAME,
+                "The parameter name '$parameterName' conflicts with the existing " +
+                    "'$conflictingName' in '${method.name}'.",
+            )
+        }
 
         val affected = AffectedFiles()
         affected.paths += projectRelativePath(project, file.virtualFile.path)
@@ -220,6 +244,26 @@ class IntroduceParameterSelectionResolver(
                 affectedFiles = affected.paths.distinct().sorted(),
             ),
         )
+    }
+
+    /**
+     * Returns the name of the first parameter or surviving local variable in [method] whose name
+     * collides with the new [parameterName], or null when the name is free. [liftedLocal] is the
+     * source local being removed by the refactoring (or null for an expression source); every other
+     * variable in the method survives and would be shadowed by (or shadow) the new parameter. This
+     * mirrors the native processor's same-name-variable conflict detection so the resolver rejects
+     * before any mutation rather than letting the native processor rename or prompt.
+     */
+    private fun conflictingVariableName(
+        method: PsiMethod,
+        liftedLocal: PsiLocalVariable?,
+        parameterName: String,
+    ): String? {
+        for (variable in PsiTreeUtil.collectElementsOfType(method, PsiVariable::class.java)) {
+            if (variable === liftedLocal) continue
+            if (variable.name == parameterName) return variable.name
+        }
+        return null
     }
 
     private class AffectedFiles {

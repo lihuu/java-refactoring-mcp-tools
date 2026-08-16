@@ -217,6 +217,36 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         }
     }
 
+    // --- Step: genuine native conflict surfaces as IntroduceParameterConflictException ---
+
+    fun testNativeNameConflictThrowsConflictExceptionAndMutatesNothing() {
+        val fixture = priceServiceFixture()
+        // Resolve with an accepted name, then hand the executor a name that clashes with the
+        // existing parameter `rate` to reach the native processor's conflict detection (the
+        // resolver rejects such a name up front, so it is only reachable at the executor boundary).
+        val selection = resolveExpression(fixture, "rate * 2", "doubledRate")
+        val originals = fixture.affectedFiles.associateWith(::documentText)
+
+        try {
+            runWithThrowingDialog {
+                runExecutor {
+                    IntellijIntroduceParameterExecutor()
+                        .introduceParameter(project, selection, "rate")
+                }
+            }
+            fail("expected IntroduceParameterConflictException for the native name conflict")
+        } catch (e: IntroduceParameterConflictException) {
+            assertTrue(
+                "conflict message must name the clashing symbol",
+                e.message.orEmpty().contains("rate"),
+            )
+        }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        originals.forEach { (path, original) ->
+            assertEquals(path, original, documentText(path))
+        }
+    }
+
     // --- helpers ---
 
     private class ExecutorFixture(

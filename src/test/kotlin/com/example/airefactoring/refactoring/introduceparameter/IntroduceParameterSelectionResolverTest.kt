@@ -249,6 +249,34 @@ class IntroduceParameterSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
     }
 
+    fun testParameterNameConflictingWithExistingParameterIsRejectedWithoutMutation() {
+        val range = configureMarkedFile(
+            "ParamConflict.java",
+            "class ParamConflict { int total(int count) { return <selection>count * 2</selection>; } }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(project, "ParamConflict.java", range, "count"),
+            McpRefactoringErrorCode.INVALID_PARAMETER_NAME,
+        )
+        assertEquals(original, myFixture.editor.document.text)
+    }
+
+    fun testParameterNameConflictingWithSurvivingLocalIsRejectedWithoutMutation() {
+        val range = configureMarkedFile(
+            "LocalConflict.java",
+            "class LocalConflict { int total(int count) { int multiplier = 5; return <selection>count * multiplier</selection>; } }",
+        )
+        val original = myFixture.editor.document.text
+
+        requireFailure(
+            resolver.resolve(project, "LocalConflict.java", range, "multiplier"),
+            McpRefactoringErrorCode.INVALID_PARAMETER_NAME,
+        )
+        assertEquals(original, myFixture.editor.document.text)
+    }
+
     fun testOverloadSetSharingNameIsUnsupported() {
         val range = configureMarkedFile(
             "OverloadTarget.java",

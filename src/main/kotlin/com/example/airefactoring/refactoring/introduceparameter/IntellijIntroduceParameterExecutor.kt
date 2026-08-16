@@ -1,18 +1,21 @@
 package com.example.airefactoring.refactoring.introduceparameter
 
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.command.UndoConfirmationPolicy
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiExpression
 import com.intellij.psi.PsiLocalVariable
 import com.intellij.psi.PsiMethodCallExpression
-import com.intellij.psi.PsiReferenceExpression
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.introduceParameter.IntroduceParameterProcessor
 import com.intellij.refactoring.introduceVariable.IntroduceVariableBase
+import com.intellij.usageView.UsageInfo
+import com.intellij.util.containers.MultiMap
 import it.unimi.dsi.fastutil.ints.IntArrayList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,43 +39,51 @@ class IntellijIntroduceParameterExecutor internal constructor(
         project: Project,
         selection: IntroduceParameterSelection,
         parameterName: String,
-    ): IntroduceParameterExecutionResult = withContext(Dispatchers.EDT) {
-        requireValidSource(selection)
-        val method = selection.method
-
-        // Compute the caller count and target parameter position from the pristine method BEFORE
-        // mutation, so PSI staleness after the native rewrite cannot skew the reported result.
-        val updatedCallSiteCount = countExternalCallSites(selection)
-        val parameterPosition = method.parameterList.parametersCount + 1
-
-        // Snapshot every affected document AT MUTATION TIME, on the EDT, held as smart pointers so
-        // a later rollback can compare exact text.
-        val documents = snapshotAffectedDocuments(project, selection.affectedFiles)
-
-        val processor = try {
-            buildProcessor(project, selection, parameterName)
-        } catch (e: IntroduceParameterPreparationException) {
-            throw e
+    ): IntroduceParameterExecutionResult {
+        // Compute the caller count from the pristine method BEFORE mutation, so PSI staleness after
+        // the native rewrite cannot skew the reported result. This must run OFF the EDT:
+        // countExternalCallSites resolves method references, whose stub-index lookup trips the
+        // platform's "Slow operations are prohibited on EDT" guard. The resolver already enumerated
+        // every direct call site under a read action; the count is re-derived here in the same way.
+        val updatedCallSiteCount = smartReadAction(project) {
+            countExternalCallSites(selection)
         }
-        processor.setPreviewUsages(false)
+        return withContext(Dispatchers.EDT) {
+            requireValidSource(selection)
+            val method = selection.method
 
-        try {
-            processor.run()
-            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            // Compute the target parameter position from the pristine method before mutation.
+            val parameterPosition = method.parameterList.parametersCount + 1
 
-            val result = resultInspector.inspect(
-                selection,
-                parameterName,
-                method.name,
-                selection.sourceType.canonicalText,
-                parameterPosition,
-                updatedCallSiteCount,
-            )
-            saveAffectedDocuments(project, selection.affectedFiles, documents)
-            result
-        } catch (e: Exception) {
-            rollbackNativeMutation(project, documents, e)
-            throw e
+            // Snapshot every affected document AT MUTATION TIME, on the EDT, held as smart pointers so
+            // a later rollback can compare exact text.
+            val documents = snapshotAffectedDocuments(project, selection.affectedFiles)
+
+            val processor = try {
+                buildProcessor(project, selection, parameterName)
+            } catch (e: IntroduceParameterPreparationException) {
+                throw e
+            }
+            processor.setPreviewUsages(false)
+
+            try {
+                processor.run()
+                PsiDocumentManager.getInstance(project).commitAllDocuments()
+
+                val result = resultInspector.inspect(
+                    selection,
+                    parameterName,
+                    method.name,
+                    selection.sourceType.canonicalText,
+                    parameterPosition,
+                    updatedCallSiteCount,
+                )
+                saveAffectedDocuments(project, selection.affectedFiles, documents)
+                result
+            } catch (e: Exception) {
+                rollbackNativeMutation(project, documents, e)
+                throw e
+            }
         }
     }
 
@@ -211,7 +222,10 @@ class IntellijIntroduceParameterExecutor internal constructor(
         val method = selection.method
         val psiManager = com.intellij.psi.PsiManager.getInstance(method.project)
         val fileSystem = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-        val basePath = method.project.basePath ?: return selection.affectedFiles.size
+        // A project without a base path cannot resolve project-relative paths; report 0 rather than
+        // a semantic-lie count (this never happens for a real project, and the snapshot/save helpers
+        // below degrade the same way).
+        val basePath = method.project.basePath ?: return 0
         var count = 0
         selection.affectedFiles.forEach { path ->
             val virtualFile = fileSystem.findFileByPath(Path.of(basePath).resolve(path).normalize().toString())
@@ -219,8 +233,8 @@ class IntellijIntroduceParameterExecutor internal constructor(
             val file = psiManager.findFile(virtualFile) as? com.intellij.psi.PsiJavaFile
                 ?: return@forEach
             PsiTreeUtil.findChildrenOfType(file, PsiMethodCallExpression::class.java).forEach { call ->
-                val reference = call.methodExpression as? PsiReferenceExpression
-                if (reference != null && psiManager.areElementsEquivalent(reference.resolve(), method)) {
+                val reference = call.methodExpression
+                if (psiManager.areElementsEquivalent(reference.resolve(), method)) {
                     count++
                 }
             }
@@ -338,4 +352,25 @@ private class HeadlessIntroduceParameterProcessor(
 ) {
     override fun getUndoConfirmationPolicy(): UndoConfirmationPolicy =
         UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION
+
+    /**
+     * The native [IntroduceParameterProcessor.preprocessUsages] funnels every conflict it detects
+     * (a same-name parameter/local, an initializer member inaccessible from a call site, an
+     * unsupported call usage, ...) into this seam before it would show a conflicts dialog. A
+     * headless MCP flow cannot answer that dialog, so a genuine native conflict is surfaced as
+     * [IntroduceParameterConflictException] for the operation to map to `REFACTORING_CONFLICT`;
+     * an empty conflict set proceeds exactly as the base implementation would.
+     */
+    override fun showConflicts(
+        conflicts: MultiMap<PsiElement, String>,
+        usages: Array<out UsageInfo>?,
+    ): Boolean {
+        if (!conflicts.isEmpty) {
+            throw IntroduceParameterConflictException(
+                conflicts.values().distinct().joinToString(separator = "; "),
+            )
+        }
+        prepareSuccessful()
+        return true
+    }
 }
