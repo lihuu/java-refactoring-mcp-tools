@@ -416,6 +416,27 @@ class McpRefactoringResultTest : TestCase() {
         shapes.forEach { obj -> assertMemberFieldsAbsent(obj.keys) }
     }
 
+    fun testSafeDeleteSuccessContainsTargetDescriptionAndNativeUsageCount() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.safeDeleteSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/Service.java",
+                targetDescription = "method obsolete()",
+                nativeUsageCount = 0,
+                summary = "Deleted method 'obsolete()'.",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_safe_delete", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/main/java/example/Service.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("method obsolete()", obj.getValue("targetDescription").jsonPrimitive.content)
+        assertEquals(0, obj.getValue("nativeUsageCount").jsonPrimitive.int)
+        assertEquals("Deleted method 'obsolete()'.", obj.getValue("summary").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+    }
+
     private fun assertMemberFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("requestedFieldName"))
         assertFalse(keys.contains("actualFieldName"))

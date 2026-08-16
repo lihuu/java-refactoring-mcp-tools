@@ -30,6 +30,7 @@ enum class McpRefactoringErrorCode {
     UNSUPPORTED_DESTINATION,
     PREPARE_FAILED,
     REFACTORING_FAILED,
+    UNSUPPORTED_TARGET,
 }
 
 @Serializable
@@ -58,6 +59,8 @@ data class McpRefactoringResult private constructor(
     val defaultCallSiteExpression: String? = null,
     val updatedCallSiteCount: Int? = null,
     val affectedFiles: List<String>? = null,
+    val targetDescription: String? = null,
+    val nativeUsageCount: Int? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -208,6 +211,22 @@ data class McpRefactoringResult private constructor(
             sourceKind = sourceKind,
             updatedCallSiteCount = updatedCallSiteCount,
             affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun safeDeleteSuccess(
+            projectBasePath: String,
+            filePath: String,
+            targetDescription: String,
+            nativeUsageCount: Int,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_safe_delete",
+            projectBasePath = projectBasePath,
+            filePath = filePath,
+            targetDescription = targetDescription,
+            nativeUsageCount = nativeUsageCount,
             summary = summary,
         )
 
