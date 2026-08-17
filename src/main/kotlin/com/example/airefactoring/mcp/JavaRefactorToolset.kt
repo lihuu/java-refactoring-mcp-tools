@@ -8,6 +8,7 @@ import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOp
 import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
 import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
+import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -23,6 +24,7 @@ class JavaRefactorToolset(
     private val introduceConstantOperation: IntroduceConstantOperation = IntroduceConstantOperation(),
     private val introduceFieldOperation: IntroduceFieldOperation = IntroduceFieldOperation(),
     private val introduceParameterOperation: IntroduceParameterOperation = IntroduceParameterOperation(),
+    private val javaSafeDeleteOperation: JavaSafeDeleteOperation = JavaSafeDeleteOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -158,6 +160,20 @@ class JavaRefactorToolset(
         parameterName,
     )
 
+    @McpTool
+    @McpDescription(SAFE_DELETE_DESCRIPTION)
+    suspend fun java_safe_delete(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line") startLine: Int,
+        @McpDescription("1-based inclusive start column") startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position") endLine: Int,
+        @McpDescription("1-based exclusive end column") endColumn: Int,
+    ): String = javaSafeDeleteOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+    )
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -263,5 +279,18 @@ class JavaRefactorToolset(
                 "1-based source range with an inclusive start and exclusive end (start inclusive, " +
                 "end exclusive). The parameter name must be a valid Java identifier. Returns JSON " +
                 "with ok=true on success or ok=false with a stable error code on failure."
+
+        const val SAFE_DELETE_DESCRIPTION =
+            "Deletes one Java declaration using IntelliJ's native Safe Delete refactoring. Use it " +
+                "after reading the declaration and all of its usages, presenting the deletion and " +
+                "its consequences, and waiting for user approval. The native processor finds every " +
+                "usage and refuses the deletion when any unsafe usages remain, so the agent must " +
+                "never guess whether a target is safe. The target is a project-relative Java file " +
+                "path and a 1-based source range (start inclusive, end exclusive) that exactly " +
+                "matches the declaration name or the complete element. Re-read the modified file " +
+                "and run diagnostics, build, and tests after success. Never use direct text edits, " +
+                "patches, whole-file rewrites, or direct PSI mutation as a fallback when the " +
+                "native refactoring refuses the target. Returns JSON with ok=true on success or " +
+                "ok=false with a stable error code on failure."
     }
 }

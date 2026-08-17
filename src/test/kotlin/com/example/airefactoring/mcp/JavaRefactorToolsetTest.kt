@@ -62,6 +62,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_introduce_constant missing", "java_introduce_constant" in names)
         assertTrue("java_introduce_field missing", "java_introduce_field" in names)
         assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
+        assertTrue("java_safe_delete missing", "java_safe_delete" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -278,6 +279,36 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("affectedFiles"))
         assertTrue(description.contains("Never use direct text edits"))
         assertTrue(description.contains("does not support general Change Signature"))
+    }
+
+    fun testSafeDeleteSchemaContainsExactlyFiveDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_safe_delete" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testSafeDeleteDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_safe_delete" }
+            .description
+
+        assertTrue(description.contains("Safe Delete"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("unsafe usages"))
+        assertTrue(description.contains("Never use direct text edits"))
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {
