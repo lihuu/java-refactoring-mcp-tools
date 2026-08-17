@@ -1,15 +1,16 @@
 package com.example.airefactoring.refactoring.safedelete
 
 import com.example.airefactoring.mcp.McpRefactoringErrorCode
-import com.intellij.model.Pointer
-import com.intellij.refactoring.safeDelete.api.SafeDeleteTarget
+import com.intellij.psi.PsiElement
+import com.intellij.psi.SmartPsiElementPointer
 
 /**
  * A successfully resolved safe-delete target. The only PSI carried across the read/EDT boundary is
- * held through the native [SafeDeleteTarget] pointer, which the executor dereferences later.
+ * held through a [SmartPsiElementPointer] to the resolved declaration, which the executor
+ * dereferences later.
  */
 data class SafeDeletePreparation(
-    val targetPointer: Pointer<out SafeDeleteTarget>,
+    val elementPointer: SmartPsiElementPointer<PsiElement>,
     val sourceDocumentPath: String,
     val targetDescription: String,
 )

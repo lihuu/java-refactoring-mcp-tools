@@ -9,15 +9,16 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiNameIdentifierOwner
-import com.intellij.refactoring.safeDelete.api.SafeDeleteTarget
-import com.intellij.refactoring.safeDelete.api.SafeDeleteTargetProvider
+import com.intellij.psi.SmartPointerManager
+import com.intellij.refactoring.safeDelete.SafeDeleteProcessor
+import com.intellij.usageView.UsageViewUtil
 import java.nio.file.Path
 
 /**
  * Resolves a 1-based exact source range to one native safe-delete target. The range must equal
  * either a [PsiNameIdentifierOwner]'s name identifier or the complete range of a nameless
- * candidate; acceptance is delegated entirely to the native [SafeDeleteTargetProvider], with no
- * plugin-defined target-kind allowlist. It never mutates the source.
+ * candidate; acceptance is delegated entirely to the native [SafeDeleteProcessor.validElement]
+ * predicate, with no plugin-defined target-kind allowlist. It never mutates the source.
  */
 class JavaSafeDeleteTargetResolver(
     private val targetResolver: JavaSourceTargetResolver = JavaSourceTargetResolver(),
@@ -50,9 +51,8 @@ class JavaSafeDeleteTargetResolver(
         while (element != null) {
             if (isCandidate(element, exactRange)) {
                 matchedCandidate = true
-                val nativeTarget = SafeDeleteTargetProvider.createSafeDeleteTarget(element)
-                if (nativeTarget != null) {
-                    return success(project, file, nativeTarget)
+                if (SafeDeleteProcessor.validElement(element)) {
+                    return success(project, file, element)
                 }
             }
             element = element.parent
@@ -87,12 +87,13 @@ class JavaSafeDeleteTargetResolver(
     private fun success(
         project: Project,
         file: PsiJavaFile,
-        nativeTarget: SafeDeleteTarget,
+        element: PsiElement,
     ): SafeDeleteTargetResolution = SafeDeleteTargetResolution.Success(
         SafeDeletePreparation(
-            targetPointer = nativeTarget.createPointer(),
+            elementPointer = SmartPointerManager.getInstance(project)
+                .createSmartPsiElementPointer(element),
             sourceDocumentPath = projectRelativePath(project, file.virtualFile.path),
-            targetDescription = nativeTarget.targetPresentation().presentableText,
+            targetDescription = UsageViewUtil.getLongName(element),
         ),
     )
 

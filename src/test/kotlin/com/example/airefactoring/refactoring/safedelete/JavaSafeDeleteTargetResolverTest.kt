@@ -139,8 +139,8 @@ class JavaSafeDeleteTargetResolverTest : LightJavaCodeInsightFixtureTestCase() {
             is SafeDeleteTargetResolution.Success -> {
                 val preparation = result.preparation
                 assertNotNull(
-                    "native target pointer must dereference",
-                    preparation.targetPointer.dereference(),
+                    "element pointer must dereference",
+                    preparation.elementPointer.element,
                 )
                 assertTrue(
                     "target description must not be blank",
