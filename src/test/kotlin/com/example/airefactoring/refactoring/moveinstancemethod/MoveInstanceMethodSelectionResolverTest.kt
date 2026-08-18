@@ -4,6 +4,8 @@ import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiJavaFile
+import com.intellij.psi.PsiManager
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
@@ -152,6 +154,58 @@ class MoveInstanceMethodSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
     }
 
+    fun testRejectsConstructor() {
+        parameterFixture()
+        val result = resolver.resolve(
+            project = project,
+            pathInProject = "example/Order.java",
+            methodRange = constructorRangeOf("example/Order.java", "Order"),
+            targetRange = rangeOf("example/Order.java", "amount"),
+            newVisibility = "public",
+        )
+        assertTrue(
+            "expected UNSUPPORTED_METHOD for a constructor but was $result",
+            result is MoveInstanceMethodSelectionResolution.Failure,
+        )
+        val failure = result as MoveInstanceMethodSelectionResolution.Failure
+        assertEquals("UNSUPPORTED_METHOD", failure.code.name)
+        assertTrue(failure.message.isNotBlank())
+    }
+
+    fun testRejectsStaticMethod() {
+        mirrorRealFile(
+            "example/StaticMethod.java",
+            """
+                package example;
+
+                public class StaticMethod {
+                    public static double apply(Customer customer) {
+                        return customer.rate();
+                    }
+                }
+            """.trimIndent(),
+        )
+        mirrorRealFile(
+            "example/Customer.java",
+            """
+                package example;
+
+                public class Customer {
+                    public double rate() {
+                        return 0;
+                    }
+                }
+            """.trimIndent(),
+        )
+        assertFailure(
+            "example/StaticMethod.java",
+            "apply",
+            "customer",
+            "public",
+            "UNSUPPORTED_METHOD",
+        )
+    }
+
     fun testRejectsInvalidVisibility() {
         parameterFixture()
         assertFailure(
@@ -223,6 +277,25 @@ class MoveInstanceMethodSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         val failure = result as MoveInstanceMethodSelectionResolution.Failure
         assertEquals(expectedCode, failure.code.name)
         assertTrue(failure.message.isNotBlank())
+    }
+
+    private fun constructorRangeOf(path: String, className: String): SourceRange {
+        val virtualFile = LocalFileSystem.getInstance()
+            .findFileByPath(Path.of(project.basePath!!, path).toString())!!
+        val document = FileDocumentManager.getInstance().getDocument(virtualFile)!!
+        PsiDocumentManager.getInstance(project).commitDocument(document)
+        val psiFile = PsiManager.getInstance(project).findFile(virtualFile) as PsiJavaFile
+        val javaClass = psiFile.classes.single { it.name == className }
+        val constructor = javaClass.constructors.single()
+        val nameRange = constructor.nameIdentifier!!.textRange
+        val startLine = document.getLineNumber(nameRange.startOffset)
+        val endLine = document.getLineNumber(nameRange.endOffset - 1)
+        return SourceRange(
+            startLine = startLine + 1,
+            startColumn = nameRange.startOffset - document.getLineStartOffset(startLine) + 1,
+            endLine = endLine + 1,
+            endColumn = nameRange.endOffset - document.getLineStartOffset(endLine) + 1,
+        )
     }
 
     private fun rangeOf(path: String, needle: String): SourceRange {

@@ -8,6 +8,7 @@ import com.example.airefactoring.refactoring.SourceRange
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiModifier
 import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.PsiParameter
 import com.intellij.psi.PsiVariable
@@ -55,6 +56,18 @@ class MoveInstanceMethodSelectionResolver(
                 McpRefactoringErrorCode.INVALID_RANGE,
                 "The method range must exactly select a method declaration name.",
             )
+        if (method.isConstructor) {
+            return failure(
+                McpRefactoringErrorCode.UNSUPPORTED_METHOD,
+                "Move Instance Method requires an ordinary instance method, not a constructor.",
+            )
+        }
+        if (method.hasModifierProperty(PsiModifier.STATIC)) {
+            return failure(
+                McpRefactoringErrorCode.UNSUPPORTED_METHOD,
+                "Move Instance Method requires an instance method, not a static method.",
+            )
+        }
         val variable = findExactDeclaration(targetTarget, PsiVariable::class.java)
             ?: return failure(
                 McpRefactoringErrorCode.INVALID_RANGE,

@@ -4,6 +4,7 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
+import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethod
@@ -57,7 +58,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
         val updatedCallSiteCount = usages.count {
             it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression
         }
-        val affectedFiles = projectRelativeUsageFiles(project, usages)
+        val affectedFiles = projectRelativeAffectedFiles(project, usages, target, preparation)
 
         processor.setPreviewUsages(false)
         processor.run()
@@ -122,25 +123,45 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
         if (newVisibility.isEmpty()) "packageLocal" else newVisibility
 
     /**
-     * Maps every native usage to its containing project-relative file. Returns null (and omits the
-     * affected-file output) when a complete set cannot be proven, e.g. a usage element without a
-     * project file.
+     * Builds a provably complete affected-file set. Beyond every native usage file, the move always
+     * modifies the destination target-class file (the method is added there) and the source file
+     * (the method is removed from it); the destination target-class file may not appear among the
+     * usages when it is a top-level class in a separate file. Returns null (and omits the
+     * affected-file output) when any element cannot be resolved to a project-relative path, because
+     * then a complete inventory cannot be proven.
      */
-    private fun projectRelativeUsageFiles(
+    private fun projectRelativeAffectedFiles(
         project: Project,
         usages: Array<UsageInfo>,
+        target: PsiVariable,
+        preparation: MoveInstanceMethodPreparation,
     ): List<String>? {
         val basePath = project.basePath ?: return null
         val base = Path.of(basePath).toAbsolutePath().normalize()
-        val files = mutableSetOf<String>()
+
+        // Destination target-class file: resolve the parameter's declared type to its class.
+        val targetClass = (target.type as? PsiClassType)?.resolve() ?: return null
+        val destinationVirtualFile = targetClass.containingFile?.virtualFile ?: return null
+        val destinationRel = relativeProjectPath(base, destinationVirtualFile.path) ?: return null
+
+        // Source file: the method is always removed from its current file.
+        val sourceRel = preparation.pathInProject
+
+        val files = mutableSetOf(destinationRel, sourceRel)
         for (usage in usages) {
             val element = usage.element ?: return null
             val virtualFile = element.containingFile?.virtualFile ?: return null
-            val absolute = Path.of(virtualFile.path).toAbsolutePath().normalize()
-            if (!absolute.startsWith(base)) return null
-            files.add(base.relativize(absolute).toString())
+            val rel = relativeProjectPath(base, virtualFile.path) ?: return null
+            files.add(rel)
         }
         return files.sorted()
+    }
+
+    /** Maps one absolute file path to a project-relative path, or null when it is not inside the project. */
+    private fun relativeProjectPath(base: Path, absolutePath: String): String? {
+        val absolute = Path.of(absolutePath).toAbsolutePath().normalize()
+        if (!absolute.startsWith(base)) return null
+        return base.relativize(absolute).toString()
     }
 
     /**

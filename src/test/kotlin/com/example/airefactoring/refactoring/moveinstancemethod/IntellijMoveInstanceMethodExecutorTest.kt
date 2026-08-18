@@ -81,6 +81,19 @@ class IntellijMoveInstanceMethodExecutorTest : LightJavaCodeInsightFixtureTestCa
         )
     }
 
+    fun testAffectedFilesIncludesSeparateDestinationClassFile() {
+        val (invoiceFile, customerFile, callerFile) = crossFileTargetFixture()
+        val preparation = prepareMove(invoiceFile, "applyDiscount", "customer", "public")
+
+        val result = runExecutor { executor.move(project, preparation) }
+
+        assertEquals(1, result.updatedCallSiteCount)
+        assertEquals(
+            listOf("example/Checkout.java", "example/Customer.java", "example/Invoice.java"),
+            result.affectedFiles,
+        )
+    }
+
     fun testOneUndoRestoresBothFiles() {
         val (invoiceFile, callerFile) = parameterFixture()
         val preparation = prepareMove(invoiceFile, "applyDiscount", "customer", "public")
@@ -209,6 +222,73 @@ class IntellijMoveInstanceMethodExecutorTest : LightJavaCodeInsightFixtureTestCa
             }
         """.trimIndent(),
     )
+
+    /**
+     * Builds a fixture whose move destination is a top-level class declared in a separate file
+     * ([Customer.java]), so the destination target-class file is distinct from the source and is not
+     * a usage file.
+     */
+    private fun crossFileTargetFixture(): Triple<PsiJavaFile, PsiJavaFile, PsiJavaFile> {
+        val invoice = mirrorRealFile(
+            "example/Invoice.java",
+            """
+                package example;
+
+                public class Invoice {
+                    private final int amount;
+
+                    public Invoice(int amount) {
+                        this.amount = amount;
+                    }
+
+                    public int getAmount() {
+                        return amount;
+                    }
+
+                    public int applyDiscount(Customer customer) {
+                        return getAmount() - customer.discount();
+                    }
+                }
+            """.trimIndent(),
+        )
+        val customer = mirrorRealFile(
+            "example/Customer.java",
+            """
+                package example;
+
+                public class Customer {
+                    private final int discountRate;
+
+                    public Customer(int discountRate) {
+                        this.discountRate = discountRate;
+                    }
+
+                    public int discount() {
+                        return discountRate;
+                    }
+                }
+            """.trimIndent(),
+        )
+        val caller = mirrorRealFile(
+            "example/Checkout.java",
+            """
+                package example;
+
+                public class Checkout {
+                    public int charge() {
+                        Invoice invoice = new Invoice(100);
+                        Customer customer = new Customer(10);
+                        return invoice.applyDiscount(customer);
+                    }
+                }
+            """.trimIndent(),
+        )
+        return Triple(
+            PsiManager.getInstance(project).findFile(invoice) as PsiJavaFile,
+            PsiManager.getInstance(project).findFile(customer) as PsiJavaFile,
+            PsiManager.getInstance(project).findFile(caller) as PsiJavaFile,
+        )
+    }
 
     private fun mirrorFixture(invoiceText: String): Pair<PsiJavaFile, PsiJavaFile> {
         val invoice = mirrorRealFile("example/Invoice.java", invoiceText)
