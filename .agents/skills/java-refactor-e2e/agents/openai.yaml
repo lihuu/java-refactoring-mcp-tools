@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java Refactor E2E"
+  short_description: "Run native IDEA MCP end-to-end acceptance"
+  default_prompt: "Use $java-refactor-e2e to validate the current Java MCP refactoring changes."

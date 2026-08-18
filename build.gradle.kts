@@ -1,4 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.gradle.api.tasks.Sync
+import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     id("java")
@@ -76,5 +78,65 @@ intellijPlatform {
 tasks {
     test {
         useJUnit()
+    }
+}
+
+val e2eFixtureSource = layout.projectDirectory.dir("src/test/testData/e2e/java-refactor-fixture")
+val e2eWorkspace = layout.buildDirectory.dir("e2e-workspace")
+val e2eMcpPort = 3001
+
+val prepareE2eFixture = tasks.register<Sync>("prepareE2eFixture") {
+    group = "verification"
+    description = "Resets the disposable Java project used by real IDEA MCP acceptance."
+    from(e2eFixtureSource)
+    into(e2eWorkspace)
+    includeEmptyDirs = false
+}
+
+val runE2eIde = intellijPlatformTesting.runIde.register("runE2eIde") {
+    sandboxDirectory.set(layout.buildDirectory.dir("e2e-sandbox"))
+
+    prepareSandboxTask {
+        doLast {
+            val optionsDirectory = sandboxConfigDirectory.get().asFile.resolve("options")
+            optionsDirectory.mkdirs()
+            optionsDirectory.resolve("mcpServer.xml").writeText(
+                """
+                <application>
+                  <component name="McpServerSettings">
+                    <option name="enableMcpServer" value="true" />
+                    <option name="mcpServerPort" value="$e2eMcpPort" />
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
+            optionsDirectory.resolve("trusted-paths.xml").writeText(
+                """
+                <application>
+                  <component name="Trusted.Paths">
+                    <option name="TRUSTED_PROJECT_PATHS">
+                      <map>
+                        <entry key="${e2eWorkspace.get().asFile.absolutePath}" value="true" />
+                      </map>
+                    </option>
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
+        }
+    }
+
+    task {
+        group = "verification"
+        description = "Launches the disposable Java project in an MCP-enabled IDEA E2E sandbox."
+        dependsOn(prepareE2eFixture)
+        args(e2eWorkspace.get().asFile.absolutePath)
+        jvmArgumentProviders += CommandLineArgumentProvider {
+            listOf(
+                "-Didea.trust.all.projects=true",
+                "-Djb.consents.confirmation.enabled=false",
+                "-Djb.privacy.policy.text=<!--999.999-->",
+            )
+        }
     }
 }

@@ -26,3 +26,10 @@ When a user asks to extract Java code into a method or split a complex Java meth
 - Tests: `./gradlew test`.
 - Distribution: `./gradlew buildPlugin`.
 - Preserve one-command Undo for every write tool.
+
+## Real MCP end-to-end acceptance
+
+When a change affects an MCP tool schema/registration, a native refactoring resolver/executor, or
+the user requests real acceptance, read and follow
+`.agents/skills/java-refactor-e2e/SKILL.md`. It defines the disposable Java fixture, dedicated IDEA
+sandbox, real MCP discovery/call checks, diagnostics/build, logs, and one-Undo verification.
