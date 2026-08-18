@@ -8,6 +8,7 @@ import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOp
 import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
 import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
+import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -25,6 +26,7 @@ class JavaRefactorToolset(
     private val introduceFieldOperation: IntroduceFieldOperation = IntroduceFieldOperation(),
     private val introduceParameterOperation: IntroduceParameterOperation = IntroduceParameterOperation(),
     private val javaSafeDeleteOperation: JavaSafeDeleteOperation = JavaSafeDeleteOperation(),
+    private val moveInstanceMethodOperation: MoveInstanceMethodOperation = MoveInstanceMethodOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -161,6 +163,36 @@ class JavaRefactorToolset(
     )
 
     @McpTool
+    @McpDescription(MOVE_INSTANCE_METHOD_DESCRIPTION)
+    suspend fun java_move_instance_method(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the method declaration name")
+        methodStartLine: Int,
+        @McpDescription("1-based inclusive start column of the method declaration name")
+        methodStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the method declaration name")
+        methodEndLine: Int,
+        @McpDescription("1-based exclusive end column of the method declaration name")
+        methodEndColumn: Int,
+        @McpDescription("1-based inclusive start line of the target parameter name")
+        targetStartLine: Int,
+        @McpDescription("1-based inclusive start column of the target parameter name")
+        targetStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the target parameter name")
+        targetEndLine: Int,
+        @McpDescription("1-based exclusive end column of the target parameter name")
+        targetEndColumn: Int,
+        @McpDescription("New visibility of the moved method: 'public', 'protected', 'private', or empty for package-local")
+        newVisibility: String,
+    ): String = moveInstanceMethodOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(methodStartLine, methodStartColumn, methodEndLine, methodEndColumn),
+        SourceRange(targetStartLine, targetStartColumn, targetEndLine, targetEndColumn),
+        newVisibility,
+    )
+
+    @McpTool
     @McpDescription(SAFE_DELETE_DESCRIPTION)
     suspend fun java_safe_delete(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -279,6 +311,21 @@ class JavaRefactorToolset(
                 "1-based source range with an inclusive start and exclusive end (start inclusive, " +
                 "end exclusive). The parameter name must be a valid Java identifier. Returns JSON " +
                 "with ok=true on success or ok=false with a stable error code on failure."
+
+        const val MOVE_INSTANCE_METHOD_DESCRIPTION =
+            "Moves one Java instance method to its instance via IntelliJ's native Move Instance " +
+                "Method refactoring, driven headlessly with no dialog. Use it after reading the " +
+                "method, choosing the target parameter of the selected method that receives the " +
+                "method, presenting the change, and waiting for user approval. The moved method " +
+                "receives the new visibility you request, the old-owner access becomes the native " +
+                "bridge parameter, and every call site is rewritten by IntelliJ. The target is a " +
+                "project-relative Java file path plus two 1-based source ranges (start inclusive, " +
+                "end exclusive): one for the method declaration name and one for the target " +
+                "parameter name, which must be a parameter of the selected method. Re-read every " +
+                "affected file and run diagnostics, build, and tests after success. Never use " +
+                "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
+                "fallback when the native refactoring refuses the request. Returns JSON with " +
+                "ok=true on success or ok=false with a stable error code on failure."
 
         const val SAFE_DELETE_DESCRIPTION =
             "Deletes one Java declaration using IntelliJ's native Safe Delete refactoring. Use it " +

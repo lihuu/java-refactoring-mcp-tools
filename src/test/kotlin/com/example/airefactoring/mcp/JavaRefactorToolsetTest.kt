@@ -63,6 +63,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_introduce_field missing", "java_introduce_field" in names)
         assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
         assertTrue("java_safe_delete missing", "java_safe_delete" in names)
+        assertTrue("java_move_instance_method missing", "java_move_instance_method" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -308,6 +309,42 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("Safe Delete"))
         assertTrue(description.contains("native"))
         assertTrue(description.contains("unsafe usages"))
+        assertTrue(description.contains("Never use direct text edits"))
+    }
+
+    fun testMoveInstanceMethodSchemaContainsExactlyTenDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_move_instance_method" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "methodStartLine",
+                "methodStartColumn",
+                "methodEndLine",
+                "methodEndColumn",
+                "targetStartLine",
+                "targetStartColumn",
+                "targetEndLine",
+                "targetEndColumn",
+                "newVisibility",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testMoveInstanceMethodDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_move_instance_method" }
+            .description
+
+        assertTrue(description.contains("Move Instance Method"))
+        assertTrue(description.contains("Java"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("target parameter"))
         assertTrue(description.contains("Never use direct text edits"))
     }
 
