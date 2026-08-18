@@ -1,5 +1,6 @@
 package com.example.airefactoring.mcp
 
+import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticMemberKind
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -63,6 +64,12 @@ data class McpRefactoringResult private constructor(
     val targetDescription: String? = null,
     val nativeUsageCount: Int? = null,
     val newVisibility: String? = null,
+    val memberName: String? = null,
+    val memberKind: String? = null,
+    val replaceUsages: Boolean? = null,
+    val classParameterName: String? = null,
+    val fieldParameterNames: List<String>? = null,
+    val generateDelegate: Boolean? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -252,6 +259,34 @@ data class McpRefactoringResult private constructor(
             targetClassQualifiedName = targetClassQualifiedName,
             newVisibility = newVisibility,
             updatedCallSiteCount = updatedCallSiteCount,
+            affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun makeStaticSuccess(
+            projectBasePath: String,
+            filePath: String,
+            memberName: String,
+            memberKind: JavaMakeStaticMemberKind,
+            replaceUsages: Boolean,
+            classParameterName: String?,
+            fieldParameterNames: List<String>,
+            generateDelegate: Boolean,
+            nativeUsageCount: Int,
+            affectedFiles: List<String>? = null,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_make_static",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            memberName = memberName,
+            memberKind = memberKind.name.lowercase(),
+            replaceUsages = replaceUsages,
+            classParameterName = classParameterName,
+            fieldParameterNames = fieldParameterNames,
+            generateDelegate = generateDelegate,
+            nativeUsageCount = nativeUsageCount,
             affectedFiles = affectedFiles,
             summary = summary,
         )

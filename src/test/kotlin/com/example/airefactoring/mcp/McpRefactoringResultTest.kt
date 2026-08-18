@@ -1,5 +1,6 @@
 package com.example.airefactoring.mcp
 
+import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticMemberKind
 import junit.framework.TestCase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
@@ -367,6 +368,46 @@ class McpRefactoringResultTest : TestCase() {
                 obj.containsKey("sourceKind"),
             )
         }
+    }
+
+    fun testMakeStaticSuccessContainsMemberAndSettingsFacts() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.makeStaticSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Order.java",
+                memberName = "applyDiscount",
+                memberKind = JavaMakeStaticMemberKind.METHOD,
+                replaceUsages = true,
+                classParameterName = "order",
+                fieldParameterNames = listOf("a", "r"),
+                generateDelegate = false,
+                nativeUsageCount = 2,
+                affectedFiles = listOf("example/Checkout.java"),
+                summary = "Made method 'applyDiscount' static and updated 2 native usages.",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_make_static", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/Order.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("applyDiscount", obj.getValue("memberName").jsonPrimitive.content)
+        assertEquals("method", obj.getValue("memberKind").jsonPrimitive.content)
+        assertTrue(obj.getValue("replaceUsages").jsonPrimitive.boolean)
+        assertEquals("order", obj.getValue("classParameterName").jsonPrimitive.content)
+        assertEquals(
+            listOf("a", "r"),
+            obj.getValue("fieldParameterNames").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(obj.getValue("generateDelegate").jsonPrimitive.boolean)
+        assertEquals(2, obj.getValue("nativeUsageCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("example/Checkout.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse("methodName must not be populated for Make Static", obj.containsKey("methodName"))
+        assertFalse(obj.containsKey("newVisibility"))
+        assertFalse(obj.containsKey("code"))
     }
 
     fun testExistingSuccessShapesOmitAllNewMemberFields() {
