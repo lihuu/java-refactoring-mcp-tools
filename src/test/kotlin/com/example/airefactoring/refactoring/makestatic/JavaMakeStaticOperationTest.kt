@@ -218,6 +218,30 @@ class JavaMakeStaticOperationTest : LightJavaCodeInsightFixtureTestCase() {
         }
     }
 
+    fun testParallelFieldListsWithDifferentLengthsFailBeforeExecutorInvocation() {
+        val spy = SpyExecutor()
+        val operation = JavaMakeStaticOperation(executor = spy)
+
+        val json = runOperation {
+            operation.execute(
+                project = project,
+                pathInProject = FILE,
+                memberRange = nameRange(FILE, SOURCE, "applyDiscount"),
+                replaceUsages = true,
+                classParameterName = null,
+                fieldStartLines = listOf(4),
+                fieldStartColumns = emptyList(),
+                fieldEndLines = emptyList(),
+                fieldEndColumns = emptyList(),
+                fieldParameterNames = emptyList(),
+                generateDelegate = false,
+            )
+        }
+
+        assertFailureCode(json, "INVALID_RANGE")
+        assertEquals(0, spy.times)
+    }
+
     // --- helpers ---
 
     private fun runOperation(block: suspend () -> String): String {

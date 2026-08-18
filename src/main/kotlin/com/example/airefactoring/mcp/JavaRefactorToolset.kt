@@ -10,7 +10,6 @@ import com.example.airefactoring.refactoring.introduceparameter.IntroduceParamet
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
-import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticFieldParameter
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -214,10 +213,18 @@ class JavaRefactorToolset(
         )
         classParameterName: String? = null,
         @McpDescription(
-            "Ordered list of explicitly selected instance fields to pass as parameters; each item is " +
-                "the exact declaration-name range of one field plus the AI-selected parameter name",
+            "Ordered 1-based start lines of explicitly selected instance fields; this list and every " +
+                "other field list use the same index order",
         )
-        fieldParameters: List<JavaMakeStaticFieldParameter> = emptyList(),
+        fieldStartLines: List<Int> = emptyList(),
+        @McpDescription("Ordered 1-based start columns of selected fields, aligned with fieldStartLines")
+        fieldStartColumns: List<Int> = emptyList(),
+        @McpDescription("Ordered 1-based exclusive end lines of selected fields, aligned with fieldStartLines")
+        fieldEndLines: List<Int> = emptyList(),
+        @McpDescription("Ordered 1-based exclusive end columns of selected fields, aligned with fieldStartLines")
+        fieldEndColumns: List<Int> = emptyList(),
+        @McpDescription("AI-selected Java parameter names, aligned with fieldStartLines")
+        fieldParameterNames: List<String> = emptyList(),
         @McpDescription("Generate a delegate method that forwards to the made-static member")
         generateDelegate: Boolean,
     ): String = javaMakeStaticOperation.execute(
@@ -226,7 +233,11 @@ class JavaRefactorToolset(
         SourceRange(startLine, startColumn, endLine, endColumn),
         replaceUsages,
         classParameterName,
-        fieldParameters,
+        fieldStartLines,
+        fieldStartColumns,
+        fieldEndLines,
+        fieldEndColumns,
+        fieldParameterNames,
         generateDelegate,
     )
 
@@ -370,16 +381,15 @@ class JavaRefactorToolset(
                 "IntelliJ's native Make Static refactoring, driven headlessly with no dialog. Use it " +
                 "after reading the target method or inner class, its enclosing state, and its call " +
                 "sites, then choosing the parameterization explicitly: replaceUsages, an optional " +
-                "classParameterName for the enclosing instance, an ordered list of explicitly selected " +
-                "instance fields to pass as parameters, and generateDelegate. The plugin does not infer " +
-                "fields, choose parameter names, reorder parameters, or decide whether a delegate is " +
-                "appropriate. The target is a project-relative Java file path and a 1-based source " +
-                "range (start inclusive, end exclusive) that exactly matches the method or inner-class " +
-                "declaration name, plus the exact declaration-name range of every selected field. " +
-                "Re-read every affected file and run diagnostics, build, and tests after success. " +
-                "Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
-                "fallback when the native refactoring refuses the request. Returns JSON with ok=true " +
-                "on success or ok=false with a stable error code on failure."
+                "classParameterName for the enclosing instance, ordered parallel field range and name " +
+                "lists for explicitly selected instance fields, and generateDelegate. Every field list " +
+                "uses the same index order. The plugin does not infer fields, choose parameter names, " +
+                "reorder parameters, or decide whether a delegate is appropriate. The target is a " +
+                "project-relative Java file path and a 1-based source range (start inclusive, end " +
+                "exclusive) that exactly matches the method or inner-class declaration name. Never use " +
+                "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback " +
+                "when the native refactoring refuses the request. Returns JSON with ok=true on success " +
+                "or ok=false with a stable error code on failure."
 
         const val SAFE_DELETE_DESCRIPTION =
             "Deletes one Java declaration using IntelliJ's native Safe Delete refactoring. Use it " +

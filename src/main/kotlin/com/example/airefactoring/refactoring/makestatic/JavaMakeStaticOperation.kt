@@ -24,6 +24,41 @@ class JavaMakeStaticOperation(
         memberRange: SourceRange,
         replaceUsages: Boolean,
         classParameterName: String?,
+        fieldStartLines: List<Int>,
+        fieldStartColumns: List<Int>,
+        fieldEndLines: List<Int>,
+        fieldEndColumns: List<Int>,
+        fieldParameterNames: List<String>,
+        generateDelegate: Boolean,
+    ): String = try {
+        execute(
+            project = project,
+            pathInProject = pathInProject,
+            memberRange = memberRange,
+            replaceUsages = replaceUsages,
+            classParameterName = classParameterName,
+            fieldParameters = JavaMakeStaticFieldParameter.fromParallelLists(
+                fieldStartLines,
+                fieldStartColumns,
+                fieldEndLines,
+                fieldEndColumns,
+                fieldParameterNames,
+            ),
+            generateDelegate = generateDelegate,
+        )
+    } catch (e: JavaMakeStaticFieldParameterEncodingException) {
+        McpRefactoringResult.failure(
+            McpRefactoringErrorCode.INVALID_RANGE,
+            e.message ?: "Malformed Java Make Static field parameter lists.",
+        ).toJson()
+    }
+
+    suspend fun execute(
+        project: Project,
+        pathInProject: String,
+        memberRange: SourceRange,
+        replaceUsages: Boolean,
+        classParameterName: String?,
         fieldParameters: List<JavaMakeStaticFieldParameter>,
         generateDelegate: Boolean,
     ): String {

@@ -351,7 +351,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("Never use direct text edits"))
     }
 
-    fun testMakeStaticSchemaContainsExactlyTenDeclaredArguments() {
+    fun testMakeStaticSchemaUsesRuntimeSerializableParallelFieldLists() {
         val descriptor = ReflectionToolsProvider().getTools()
             .map { it.descriptor }
             .single { it.name == "java_make_static" }
@@ -365,7 +365,11 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
                 "endColumn",
                 "replaceUsages",
                 "classParameterName",
-                "fieldParameters",
+                "fieldStartLines",
+                "fieldStartColumns",
+                "fieldEndLines",
+                "fieldEndColumns",
+                "fieldParameterNames",
                 "generateDelegate",
                 "projectPath",
             ),
@@ -377,21 +381,20 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         )
     }
 
-    fun testMakeStaticFieldParametersIsArrayOfObjectsWithFiveProperties() {
+    fun testMakeStaticFieldListsUseOnlyPrimitiveArrayElements() {
         val descriptor = ReflectionToolsProvider().getTools()
             .map { it.descriptor }
             .single { it.name == "java_make_static" }
 
-        val fieldParams = descriptor.inputSchema.propertiesSchema
-            .getValue("fieldParameters")
-            .jsonObject
-        assertEquals("array", fieldParams.getValue("type").jsonPrimitive.content)
-        val items = fieldParams.getValue("items").jsonObject
-        assertEquals("object", items.getValue("type").jsonPrimitive.content)
-        assertEquals(
-            setOf("startLine", "startColumn", "endLine", "endColumn", "parameterName"),
-            items.getValue("properties").jsonObject.keys,
-        )
+        val properties = descriptor.inputSchema.propertiesSchema
+        listOf("fieldStartLines", "fieldStartColumns", "fieldEndLines", "fieldEndColumns").forEach { name ->
+            val schema = properties.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
+        val names = properties.getValue("fieldParameterNames").jsonObject
+        assertEquals("array", names.getValue("type").jsonPrimitive.content)
+        assertEquals("string", names.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
     }
 
     fun testMakeStaticDescriptionStatesAgentAndSafetyContract() {

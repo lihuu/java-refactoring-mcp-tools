@@ -20,10 +20,10 @@ installed tool in IDEA.
    plugin in `build/e2e-sandbox`, opens that project, enables the built-in MCP Server on port 3001,
    and trusts only this generated project.
 3. Wait for IDEA and the MCP endpoint to become ready; do not use a fixed sleep. Connect to
-   `http://127.0.0.1:3001/mcp` and retain one MCP session for the whole acceptance run.
-4. Call `tools/list`. Require the changed Java tool and its current schema before attempting a
-   mutation. Missing tools are an acceptance failure, never a reason to use patches or another
-   editing mechanism.
+   `http://127.0.0.1:3001/stream` and retain one MCP session for the whole acceptance run.
+4. Call `tools/list`. Require every expected Java tool in `JavaRefactorToolset`, including the
+   changed tool, and its current schema before attempting a mutation. A missing tool is a
+   Toolset-wide acceptance failure, never a reason to use patches or another editing mechanism.
 
 The fixture template is never edited directly. Re-run `prepareE2eFixture` (or restart
 `runE2eIde`) before each independent scenario.
