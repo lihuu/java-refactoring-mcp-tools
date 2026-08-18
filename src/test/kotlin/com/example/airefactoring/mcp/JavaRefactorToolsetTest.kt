@@ -3,6 +3,8 @@ package com.example.airefactoring.mcp
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.impl.ReflectionToolsProvider
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -64,6 +66,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
         assertTrue("java_safe_delete missing", "java_safe_delete" in names)
         assertTrue("java_move_instance_method missing", "java_move_instance_method" in names)
+        assertTrue("java_make_static missing", "java_make_static" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -345,6 +348,64 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("Java"))
         assertTrue(description.contains("native"))
         assertTrue(description.contains("target parameter"))
+        assertTrue(description.contains("Never use direct text edits"))
+    }
+
+    fun testMakeStaticSchemaContainsExactlyTenDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_make_static" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "replaceUsages",
+                "classParameterName",
+                "fieldParameters",
+                "generateDelegate",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertFalse(
+            "classParameterName must remain optional",
+            "classParameterName" in descriptor.inputSchema.requiredProperties,
+        )
+    }
+
+    fun testMakeStaticFieldParametersIsArrayOfObjectsWithFiveProperties() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_make_static" }
+
+        val fieldParams = descriptor.inputSchema.propertiesSchema
+            .getValue("fieldParameters")
+            .jsonObject
+        assertEquals("array", fieldParams.getValue("type").jsonPrimitive.content)
+        val items = fieldParams.getValue("items").jsonObject
+        assertEquals("object", items.getValue("type").jsonPrimitive.content)
+        assertEquals(
+            setOf("startLine", "startColumn", "endLine", "endColumn", "parameterName"),
+            items.getValue("properties").jsonObject.keys,
+        )
+    }
+
+    fun testMakeStaticDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_make_static" }
+            .description
+
+        assertTrue(description.contains("Make Static"))
+        assertTrue(description.contains("Java"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("method"))
+        assertTrue(description.contains("inner class"))
+        assertTrue(description.contains("explicitly"))
         assertTrue(description.contains("Never use direct text edits"))
     }
 

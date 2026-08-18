@@ -10,6 +10,8 @@ import com.example.airefactoring.refactoring.introduceparameter.IntroduceParamet
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
+import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticFieldParameter
+import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -27,6 +29,7 @@ class JavaRefactorToolset(
     private val introduceParameterOperation: IntroduceParameterOperation = IntroduceParameterOperation(),
     private val javaSafeDeleteOperation: JavaSafeDeleteOperation = JavaSafeDeleteOperation(),
     private val moveInstanceMethodOperation: MoveInstanceMethodOperation = MoveInstanceMethodOperation(),
+    private val javaMakeStaticOperation: JavaMakeStaticOperation = JavaMakeStaticOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -193,6 +196,41 @@ class JavaRefactorToolset(
     )
 
     @McpTool
+    @McpDescription(JAVA_MAKE_STATIC_DESCRIPTION)
+    suspend fun java_make_static(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the method or inner-class declaration name")
+        startLine: Int,
+        @McpDescription("1-based inclusive start column of the method or inner-class declaration name")
+        startColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the declaration name")
+        endLine: Int,
+        @McpDescription("1-based exclusive end column of the declaration name")
+        endColumn: Int,
+        @McpDescription("Replace usages of the made-static member throughout the project")
+        replaceUsages: Boolean,
+        @McpDescription(
+            "Optional Java identifier for the enclosing-instance parameter, or null for no such parameter",
+        )
+        classParameterName: String? = null,
+        @McpDescription(
+            "Ordered list of explicitly selected instance fields to pass as parameters; each item is " +
+                "the exact declaration-name range of one field plus the AI-selected parameter name",
+        )
+        fieldParameters: List<JavaMakeStaticFieldParameter> = emptyList(),
+        @McpDescription("Generate a delegate method that forwards to the made-static member")
+        generateDelegate: Boolean,
+    ): String = javaMakeStaticOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(startLine, startColumn, endLine, endColumn),
+        replaceUsages,
+        classParameterName,
+        fieldParameters,
+        generateDelegate,
+    )
+
+    @McpTool
     @McpDescription(SAFE_DELETE_DESCRIPTION)
     suspend fun java_safe_delete(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -326,6 +364,22 @@ class JavaRefactorToolset(
                 "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
                 "fallback when the native refactoring refuses the request. Returns JSON with " +
                 "ok=true on success or ok=false with a stable error code on failure."
+
+        const val JAVA_MAKE_STATIC_DESCRIPTION =
+            "Make Static converts one Java instance method or non-static inner class to static using " +
+                "IntelliJ's native Make Static refactoring, driven headlessly with no dialog. Use it " +
+                "after reading the target method or inner class, its enclosing state, and its call " +
+                "sites, then choosing the parameterization explicitly: replaceUsages, an optional " +
+                "classParameterName for the enclosing instance, an ordered list of explicitly selected " +
+                "instance fields to pass as parameters, and generateDelegate. The plugin does not infer " +
+                "fields, choose parameter names, reorder parameters, or decide whether a delegate is " +
+                "appropriate. The target is a project-relative Java file path and a 1-based source " +
+                "range (start inclusive, end exclusive) that exactly matches the method or inner-class " +
+                "declaration name, plus the exact declaration-name range of every selected field. " +
+                "Re-read every affected file and run diagnostics, build, and tests after success. " +
+                "Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
+                "fallback when the native refactoring refuses the request. Returns JSON with ok=true " +
+                "on success or ok=false with a stable error code on failure."
 
         const val SAFE_DELETE_DESCRIPTION =
             "Deletes one Java declaration using IntelliJ's native Safe Delete refactoring. Use it " +
