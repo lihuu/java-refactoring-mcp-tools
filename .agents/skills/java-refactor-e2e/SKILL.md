@@ -21,9 +21,13 @@ installed tool in IDEA.
    and trusts only this generated project.
 3. Wait for IDEA and the MCP endpoint to become ready; do not use a fixed sleep. Connect to
    `http://127.0.0.1:3001/stream` and retain one MCP session for the whole acceptance run.
-4. Call `tools/list`. Require every expected Java tool in `JavaRefactorToolset`, including the
-   changed tool, and its current schema before attempting a mutation. A missing tool is a
-   Toolset-wide acceptance failure, never a reason to use patches or another editing mechanism.
+4. Call `tools/list`. Determine the complete current Java-tool name set from
+   `JavaRefactorToolset`/`ReflectionToolsProvider`, then compare it with the retained-session
+   runtime result. Require every registered Java tool, including existing tools unrelated to the
+   change, and the changed tool's current schema before attempting a mutation. Inspect IDEA logs
+   for `Cannot load tools for com.example.airefactoring.mcp.JavaRefactorToolset` and serialization
+   failures. A missing single tool or either log error is a Toolset-wide acceptance failure, never
+   a reason to use patches or another editing mechanism.
 
 The fixture template is never edited directly. Re-run `prepareE2eFixture` (or restart
 `runE2eIde`) before each independent scenario.
