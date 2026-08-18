@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
@@ -77,6 +78,10 @@ class MoveInstanceMethodOperationTest : LightJavaCodeInsightFixtureTestCase() {
         )
         assertEquals("public", obj.getValue("newVisibility").jsonPrimitive.content)
         assertEquals(1, obj.getValue("updatedCallSiteCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("example/Checkout.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
         assertEquals(
             "Moved applyDiscount to example.Invoice.Customer and updated 1 call sites.",
             obj.getValue("summary").jsonPrimitive.content,

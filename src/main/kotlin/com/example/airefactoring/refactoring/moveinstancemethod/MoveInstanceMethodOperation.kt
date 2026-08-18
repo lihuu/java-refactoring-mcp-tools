@@ -52,6 +52,7 @@ class MoveInstanceMethodOperation(
                         targetClassQualifiedName = result.targetClassQualifiedName,
                         newVisibility = result.newVisibility,
                         updatedCallSiteCount = result.updatedCallSiteCount,
+                        affectedFiles = result.affectedFiles,
                         summary = result.summary,
                     ).toJson()
                 }

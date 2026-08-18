@@ -240,6 +240,7 @@ data class McpRefactoringResult private constructor(
             targetClassQualifiedName: String,
             newVisibility: String,
             updatedCallSiteCount: Int,
+            affectedFiles: List<String>? = null,
             summary: String,
         ) = McpRefactoringResult(
             ok = true,
@@ -251,6 +252,7 @@ data class McpRefactoringResult private constructor(
             targetClassQualifiedName = targetClassQualifiedName,
             newVisibility = newVisibility,
             updatedCallSiteCount = updatedCallSiteCount,
+            affectedFiles = affectedFiles,
             summary = summary,
         )
 
