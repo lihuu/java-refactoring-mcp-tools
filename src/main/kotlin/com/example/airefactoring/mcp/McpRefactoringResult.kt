@@ -31,6 +31,7 @@ enum class McpRefactoringErrorCode {
     PREPARE_FAILED,
     REFACTORING_FAILED,
     UNSUPPORTED_TARGET,
+    INVALID_VISIBILITY,
 }
 
 @Serializable
@@ -61,6 +62,7 @@ data class McpRefactoringResult private constructor(
     val affectedFiles: List<String>? = null,
     val targetDescription: String? = null,
     val nativeUsageCount: Int? = null,
+    val newVisibility: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -227,6 +229,28 @@ data class McpRefactoringResult private constructor(
             filePath = filePath,
             targetDescription = targetDescription,
             nativeUsageCount = nativeUsageCount,
+            summary = summary,
+        )
+
+        fun moveInstanceMethodSuccess(
+            projectBasePath: String,
+            filePath: String,
+            methodName: String,
+            targetDescription: String,
+            targetClassQualifiedName: String,
+            newVisibility: String,
+            updatedCallSiteCount: Int,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_move_instance_method",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            methodName = methodName,
+            targetDescription = targetDescription,
+            targetClassQualifiedName = targetClassQualifiedName,
+            newVisibility = newVisibility,
+            updatedCallSiteCount = updatedCallSiteCount,
             summary = summary,
         )
 

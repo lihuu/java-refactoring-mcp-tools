@@ -437,6 +437,77 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testMoveInstanceMethodSuccessContainsMoveFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.moveInstanceMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/Order.java",
+                methodName = "applyDiscount",
+                targetDescription = "parameter customer of type example.Customer",
+                targetClassQualifiedName = "example.Customer",
+                newVisibility = "public",
+                updatedCallSiteCount = 2,
+                summary = "Moved 'applyDiscount' to 'example.Customer' as 'public'.",
+            ).toJson()
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals(
+            "java_move_instance_method",
+            obj.getValue("operation").jsonPrimitive.content,
+        )
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals(
+            "src/main/java/example/Order.java",
+            obj.getValue("filePath").jsonPrimitive.content,
+        )
+        assertEquals("applyDiscount", obj.getValue("methodName").jsonPrimitive.content)
+        assertEquals(
+            "parameter customer of type example.Customer",
+            obj.getValue("targetDescription").jsonPrimitive.content,
+        )
+        assertEquals(
+            "example.Customer",
+            obj.getValue("targetClassQualifiedName").jsonPrimitive.content,
+        )
+        assertEquals("public", obj.getValue("newVisibility").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("updatedCallSiteCount").jsonPrimitive.int)
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testMoveInstanceMethodSuccessOmitsFieldMemberMetadata() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.moveInstanceMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "src/A.java",
+                methodName = "applyDiscount",
+                targetDescription = "parameter customer of type example.Customer",
+                targetClassQualifiedName = "example.Customer",
+                newVisibility = "protected",
+                updatedCallSiteCount = 0,
+                summary = "Moved 'applyDiscount'.",
+            ).toJson()
+        ).jsonObject
+
+        assertFalse(obj.containsKey("requestedFieldName"))
+        assertFalse(obj.containsKey("actualFieldName"))
+        assertFalse(obj.containsKey("fieldType"))
+        assertFalse(obj.containsKey("fieldModifiers"))
+        assertFalse(obj.containsKey("initializationPlace"))
+    }
+
+    fun testInvalidVisibilityErrorCodeSerializesByStableName() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.failure(
+                McpRefactoringErrorCode.INVALID_VISIBILITY,
+                "Visibility must be public, protected, private, or package-local.",
+            ).toJson()
+        ).jsonObject
+
+        assertFalse(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("INVALID_VISIBILITY", obj.getValue("code").jsonPrimitive.content)
+    }
+
     private fun assertMemberFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("requestedFieldName"))
         assertFalse(keys.contains("actualFieldName"))
