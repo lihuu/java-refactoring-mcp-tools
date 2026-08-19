@@ -83,20 +83,35 @@ tasks {
 
 val e2eFixtureSource = layout.projectDirectory.dir("src/test/testData/e2e/java-refactor-fixture")
 val e2eWorkspace = layout.buildDirectory.dir("e2e-workspace")
+val e2eSandbox = layout.buildDirectory.dir("e2e-sandbox")
 val e2eMcpPort = 3001
 
 val prepareE2eFixture = tasks.register<Sync>("prepareE2eFixture") {
     group = "verification"
     description = "Resets the disposable Java project used by real IDEA MCP acceptance."
+    outputs.upToDateWhen { false }
+    doFirst {
+        delete(e2eWorkspace)
+    }
     from(e2eFixtureSource)
     into(e2eWorkspace)
     includeEmptyDirs = false
 }
 
 val runE2eIde = intellijPlatformTesting.runIde.register("runE2eIde") {
-    sandboxDirectory.set(layout.buildDirectory.dir("e2e-sandbox"))
+    sandboxDirectory.set(e2eSandbox)
 
     prepareSandboxTask {
+        doFirst {
+            // The fixture path is stable across runs. Remove persisted project-model/editor caches
+            // before IDEA opens it again, otherwise it can retain an old in-memory document while
+            // `prepareE2eFixture` has already replaced the file on disk.
+            delete(
+                e2eSandbox.get().dir("config_runE2eIde").asFile,
+                e2eSandbox.get().dir("system_runE2eIde").asFile,
+                e2eSandbox.get().dir("log_runE2eIde").asFile,
+            )
+        }
         doLast {
             val optionsDirectory = sandboxConfigDirectory.get().asFile.resolve("options")
             optionsDirectory.mkdirs()
@@ -123,6 +138,15 @@ val runE2eIde = intellijPlatformTesting.runIde.register("runE2eIde") {
                 </application>
                 """.trimIndent(),
             )
+            optionsDirectory.resolve("registry.xml").writeText(
+                """
+                <application>
+                  <component name="Registry">
+                    <entry key="ide.experimental.ui.onboarding" value="false" />
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
         }
     }
 
@@ -134,6 +158,7 @@ val runE2eIde = intellijPlatformTesting.runIde.register("runE2eIde") {
         jvmArgumentProviders += CommandLineArgumentProvider {
             listOf(
                 "-Didea.trust.all.projects=true",
+                "-Dide.experimental.ui.onboarding=false",
                 "-Djb.consents.confirmation.enabled=false",
                 "-Djb.privacy.policy.text=<!--999.999-->",
             )

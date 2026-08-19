@@ -3,7 +3,6 @@ package com.example.airefactoring.refactoring.moveinstancemethod
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiDocumentManager
@@ -15,7 +14,6 @@ import com.intellij.refactoring.move.moveInstanceMethod.MethodCallUsageInfo
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodHandler
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodProcessor
 import com.intellij.usageView.UsageInfo
-import com.intellij.util.SlowOperations
 import com.intellij.util.containers.MultiMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,49 +38,37 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
     override suspend fun move(
         project: Project,
         preparation: MoveInstanceMethodPreparation,
-    ): MoveInstanceMethodExecutionResult = withContext(Dispatchers.EDT) {
-        val method = requireCurrentMethod(project, preparation)
-        val target = requireCurrentTarget(project, preparation)
-
-        val processor = HeadlessMoveInstanceMethodProcessor(
-            project = project,
-            method = method,
-            targetVariable = target,
-            newVisibility = nativeVisibility(preparation.newVisibility),
-            oldClassParameterNames = MoveInstanceMethodHandler.suggestParameterNames(method, target),
-        )
-
-        // Capture the complete native usage inventory before mutation: the processor-provided
-        // method-call usage count and the set of files the native search will touch. The native
-        // usage search and the processor's conflict preprocessing touch the file-based index, which
-        // is a slow operation; run both under SlowOperations so they are permitted on the EDT.
-        val result = SlowOperations.allowSlowOperations(
-            ThrowableComputable {
-                val usages = ReadAction.computeBlocking<Array<UsageInfo>, RuntimeException> {
-                    processor.findUsagesNative()
-                }
-                val updatedCallSiteCount = usages.count {
-                    it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression
-                }
-                val affectedFiles = projectRelativeAffectedFiles(project, usages, target, preparation)
-
-                processor.setPreviewUsages(false)
-                processor.run()
-                PsiDocumentManager.getInstance(project).commitAllDocuments()
-
-                MoveInstanceMethodExecutionResult(
-                    methodName = preparation.methodName,
-                    targetDescription = preparation.targetDescription,
-                    targetClassQualifiedName = preparation.targetClassQualifiedName,
-                    newVisibility = preparation.newVisibility,
-                    updatedCallSiteCount = updatedCallSiteCount,
-                    affectedFiles = affectedFiles,
-                    summary = "Moved ${preparation.methodName} to " +
-                        "${preparation.targetClassQualifiedName} and updated $updatedCallSiteCount call sites.",
+    ): MoveInstanceMethodExecutionResult {
+        val prepared = withContext(Dispatchers.EDT) {
+            val method = requireCurrentMethod(project, preparation)
+            val target = requireCurrentTarget(project, preparation)
+            PreparedNativeExecution(
+                target,
+                HeadlessMoveInstanceMethodProcessor(project, method, target, nativeVisibility(preparation.newVisibility),
+                    MoveInstanceMethodHandler.suggestParameterNames(method, target)),
+            )
+        }
+        val usageFacts = withContext(Dispatchers.Default) {
+            ReadAction.computeBlocking<NativeUsageFacts, RuntimeException> {
+                val usages = prepared.processor.findUsagesNative()
+                NativeUsageFacts(
+                    usages.count { it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression },
+                    projectRelativeAffectedFiles(project, usages, prepared.target, preparation),
                 )
-            },
-        )
-        result
+            }
+        }
+        return withContext(Dispatchers.EDT) {
+            requireCurrentMethod(project, preparation)
+            requireCurrentTarget(project, preparation)
+            prepared.processor.setPreviewUsages(false)
+            prepared.processor.run()
+            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            MoveInstanceMethodExecutionResult(
+                preparation.methodName, preparation.targetDescription, preparation.targetClassQualifiedName,
+                preparation.newVisibility, usageFacts.updatedCallSiteCount, usageFacts.affectedFiles,
+                "Moved ${preparation.methodName} to ${preparation.targetClassQualifiedName} and updated ${usageFacts.updatedCallSiteCount} call sites.",
+            )
+        }
     }
 
     /**
@@ -172,6 +158,16 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
         if (!absolute.startsWith(base)) return null
         return base.relativize(absolute).toString()
     }
+
+    private data class PreparedNativeExecution(
+        val target: PsiVariable,
+        val processor: HeadlessMoveInstanceMethodProcessor,
+    )
+
+    private data class NativeUsageFacts(
+        val updatedCallSiteCount: Int,
+        val affectedFiles: List<String>?,
+    )
 
     /**
      * A [MoveInstanceMethodProcessor] whose only change is to replace the base class's conflict UI

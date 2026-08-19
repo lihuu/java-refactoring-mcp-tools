@@ -1,6 +1,6 @@
 package example;
 
-public final class Invoice {
+public class Invoice {
     private final int amount;
 
     public Invoice(int amount) {
@@ -8,6 +8,18 @@ public final class Invoice {
     }
 
     public int applyDiscount(Customer customer) {
-        return amount - customer.discount();
+        return this.amount - customer.discount();
+    }
+
+    public static class Customer {
+        private final int discountRate;
+
+        public Customer(int discountRate) {
+            this.discountRate = discountRate;
+        }
+
+        public int discount() {
+            return discountRate;
+        }
     }
 }
