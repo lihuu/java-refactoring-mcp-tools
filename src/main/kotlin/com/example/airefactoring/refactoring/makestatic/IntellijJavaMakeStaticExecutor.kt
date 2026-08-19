@@ -2,21 +2,21 @@ package com.example.airefactoring.refactoring.makestatic
 
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiTypeParameterListOwner
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.refactoring.BaseRefactoringProcessor
 import com.intellij.refactoring.makeStatic.MakeClassStaticProcessor
 import com.intellij.refactoring.makeStatic.MakeMethodStaticProcessor
 import com.intellij.refactoring.makeStatic.Settings
 import com.intellij.refactoring.util.VariableData
 import com.intellij.usageView.UsageInfo
-import com.intellij.util.SlowOperations
 import com.intellij.util.containers.MultiMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -42,61 +42,66 @@ class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
     override suspend fun makeStatic(
         project: Project,
         preparation: JavaMakeStaticPreparation,
-    ): JavaMakeStaticExecutionResult = withContext(Dispatchers.EDT) {
-        val member = requireCurrentMember(preparation)
-        val fields = requireCurrentFields(preparation)
-        val settings = buildSettings(preparation, fields)
-
-        val processor = when (preparation.memberKind) {
-            JavaMakeStaticMemberKind.METHOD -> HeadlessMakeMethodStaticProcessor(
-                project,
-                member as PsiMethod,
-                settings,
-            )
-            JavaMakeStaticMemberKind.CLASS -> HeadlessMakeClassStaticProcessor(
-                project,
-                member as PsiClass,
-                settings,
+    ): JavaMakeStaticExecutionResult {
+        val prepared = withContext(Dispatchers.EDT) {
+            val member = requireCurrentMember(preparation)
+            val memberOwner = requireCurrentMemberOwner(preparation, member)
+            val fields = requireCurrentFields(preparation, memberOwner)
+            val settings = buildSettings(preparation, fields)
+            PreparedNativeExecution(
+                member,
+                when (preparation.memberKind) {
+                    JavaMakeStaticMemberKind.METHOD -> HeadlessMakeMethodStaticProcessor(
+                        project,
+                        member as PsiMethod,
+                        settings,
+                    )
+                    JavaMakeStaticMemberKind.CLASS -> HeadlessMakeClassStaticProcessor(
+                        project,
+                        member as PsiClass,
+                        settings,
+                    )
+                },
             )
         }
-
-        // Capture the complete native usage inventory before mutation: the processor-provided usage
-        // set and the files the native search will touch. The native usage search and the
-        // processor's preprocessing touch the file-based index, which is a slow operation; run both
-        // under SlowOperations so they are permitted on the EDT.
-        val result = SlowOperations.allowSlowOperations(
-            ThrowableComputable {
-                val usages = ReadAction.computeBlocking<Array<UsageInfo>, RuntimeException> {
-                    processor.findUsagesNative()
-                }
-                val nativeUsageCount = usages.size
-                val affectedFiles = projectRelativeAffectedFiles(project, usages, preparation)
-
-                processor.setPreviewUsages(false)
-                try {
-                    processor.run()
-                } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
-                    throw JavaMakeStaticConflictException(
-                        e.getMessages().distinct().joinToString(separator = "; "),
-                    )
-                }
-                PsiDocumentManager.getInstance(project).commitAllDocuments()
-
-                JavaMakeStaticExecutionResult(
-                    memberName = preparation.memberName,
-                    memberKind = preparation.memberKind,
-                    replaceUsages = preparation.replaceUsages,
-                    classParameterName = preparation.classParameterName,
-                    fieldParameterNames = preparation.fieldParameterNames,
-                    generateDelegate = preparation.generateDelegate,
-                    nativeUsageCount = nativeUsageCount,
-                    affectedFiles = affectedFiles,
-                    summary = "Made ${preparation.memberKind.name.lowercase()} " +
-                        "'${preparation.memberName}' static and updated $nativeUsageCount native usages.",
+        val usageFacts = withContext(Dispatchers.Default) {
+            ReadAction.computeBlocking<NativeUsageFacts, RuntimeException> {
+                val usages = prepared.processor.findUsagesNative()
+                NativeUsageFacts(
+                    nativeUsageCount = usages.size,
+                    affectedFiles = projectRelativeAffectedFiles(project, usages, preparation),
+                    filesToPersist = affectedVirtualFiles(prepared.member, usages),
                 )
-            },
-        )
-        result
+            }
+        }
+
+        return withContext(Dispatchers.EDT) {
+            requireCurrentFields(preparation, requireCurrentMemberOwner(preparation, requireCurrentMember(preparation)))
+            prepared.processor.setPreviewUsages(false)
+            try {
+                prepared.processor.run()
+            } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+                throw JavaMakeStaticConflictException(
+                    e.getMessages().distinct().joinToString(separator = "; "),
+                )
+            }
+            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            usageFacts.filesToPersist.mapNotNull(FileDocumentManager.getInstance()::getDocument)
+                .forEach(FileDocumentManager.getInstance()::saveDocument)
+
+            JavaMakeStaticExecutionResult(
+                memberName = preparation.memberName,
+                memberKind = preparation.memberKind,
+                replaceUsages = preparation.replaceUsages,
+                classParameterName = preparation.classParameterName,
+                fieldParameterNames = preparation.fieldParameterNames,
+                generateDelegate = preparation.generateDelegate,
+                nativeUsageCount = usageFacts.nativeUsageCount,
+                affectedFiles = usageFacts.affectedFiles,
+                summary = "Made ${preparation.memberKind.name.lowercase()} " +
+                    "'${preparation.memberName}' static and updated ${usageFacts.nativeUsageCount} native usages.",
+            )
+        }
     }
 
     /**
@@ -114,12 +119,53 @@ class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
                 "The Java Make Static target changed before the native refactoring could run.",
             )
         }
+        when (preparation.memberKind) {
+            JavaMakeStaticMemberKind.METHOD -> if (
+                member !is PsiMethod || member.isConstructor || member.hasModifierProperty(com.intellij.psi.PsiModifier.STATIC)
+            ) {
+                throw JavaMakeStaticPreparationException(
+                    "The Java Make Static target changed before the native refactoring could run.",
+                )
+            }
+            JavaMakeStaticMemberKind.CLASS -> if (
+                member !is PsiClass || member.containingClass == null || member.hasModifierProperty(com.intellij.psi.PsiModifier.STATIC)
+            ) {
+                throw JavaMakeStaticPreparationException(
+                    "The Java Make Static target changed before the native refactoring could run.",
+                )
+            }
+        }
         return member
     }
 
-    /** De-references every selected-field smart pointer in caller order and proves each still matches its snapshot. */
-    private fun requireCurrentFields(preparation: JavaMakeStaticPreparation): List<PsiField> {
-        if (preparation.fieldPointers.size != preparation.fieldTextSnapshots.size) {
+    /** Proves the selected member still belongs to the exact containing class resolved by the caller. */
+    private fun requireCurrentMemberOwner(
+        preparation: JavaMakeStaticPreparation,
+        member: PsiTypeParameterListOwner,
+    ): PsiClass {
+        val owner = preparation.memberOwnerPointer.element
+            ?.takeIf { it.isValid }
+            ?: throw JavaMakeStaticPreparationException(
+                "The Java Make Static target owner changed before the native refactoring could run.",
+            )
+        if (member.containingClass !== owner) {
+            throw JavaMakeStaticPreparationException(
+                "The Java Make Static target owner changed before the native refactoring could run.",
+            )
+        }
+        return owner
+    }
+
+    /** De-references every selected-field smart pointer in caller order and proves its full identity. */
+    private fun requireCurrentFields(
+        preparation: JavaMakeStaticPreparation,
+        memberOwner: PsiClass,
+    ): List<PsiField> {
+        if (
+            preparation.fieldPointers.size != preparation.fieldTextSnapshots.size ||
+            preparation.fieldPointers.size != preparation.fieldTypeSnapshots.size ||
+            preparation.fieldPointers.size != preparation.fieldParameterNames.size
+        ) {
             throw JavaMakeStaticPreparationException(
                 "The Java Make Static field selections changed before the native refactoring could run.",
             )
@@ -131,6 +177,15 @@ class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
                     "The Java Make Static field selections changed before the native refactoring could run.",
                 )
             if (field.text != preparation.fieldTextSnapshots[index]) {
+                throw JavaMakeStaticPreparationException(
+                    "The Java Make Static field selections changed before the native refactoring could run.",
+                )
+            }
+            if (
+                field.containingClass !== memberOwner ||
+                field.hasModifierProperty(com.intellij.psi.PsiModifier.STATIC) ||
+                field.type.canonicalText != preparation.fieldTypeSnapshots[index]
+            ) {
                 throw JavaMakeStaticPreparationException(
                     "The Java Make Static field selections changed before the native refactoring could run.",
                 )
@@ -184,6 +239,24 @@ class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
         }
         return files.sorted()
     }
+
+    /** Collects only files the native processor reported as its target or usages, preserving one Undo. */
+    private fun affectedVirtualFiles(member: PsiTypeParameterListOwner, usages: Array<UsageInfo>): Set<VirtualFile> =
+        buildSet {
+            member.containingFile?.virtualFile?.let(::add)
+            usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
+        }
+
+    private data class PreparedNativeExecution(
+        val member: PsiTypeParameterListOwner,
+        val processor: HeadlessJavaMakeStaticProcessor,
+    )
+
+    private data class NativeUsageFacts(
+        val nativeUsageCount: Int,
+        val affectedFiles: List<String>?,
+        val filesToPersist: Set<VirtualFile>,
+    )
 
     /** Maps one absolute file path to a project-relative path, or null when it is not inside the project. */
     private fun relativeProjectPath(base: Path, absolutePath: String): String? {

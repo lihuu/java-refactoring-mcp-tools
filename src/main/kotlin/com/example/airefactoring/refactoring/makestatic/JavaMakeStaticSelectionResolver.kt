@@ -105,9 +105,14 @@ class JavaMakeStaticSelectionResolver(
             return failure(McpRefactoringErrorCode.PREPARE_FAILED, validationMessage)
         }
 
-        val memberOwner = member.containingClass
+        val memberOwner = member.containingClass ?: return failure(
+            McpRefactoringErrorCode.PREPARE_FAILED,
+            "The Java Make Static target no longer has a containing class.",
+        )
+        val pointerManager = SmartPointerManager.getInstance(project)
         val fieldPointers = mutableListOf<SmartPsiElementPointer<PsiField>>()
         val fieldTextSnapshots = mutableListOf<String>()
+        val fieldTypeSnapshots = mutableListOf<String>()
         val fieldParameterNames = mutableListOf<String>()
         val seenFields = mutableSetOf<PsiField>()
         val seenNames = mutableSetOf<String>()
@@ -154,8 +159,9 @@ class JavaMakeStaticSelectionResolver(
                     "A field cannot be selected more than once.",
                 )
             }
-            fieldPointers.add(SmartPointerManager.getInstance(project).createSmartPsiElementPointer(field))
+            fieldPointers.add(pointerManager.createSmartPsiElementPointer(field))
             fieldTextSnapshots.add(field.text)
+            fieldTypeSnapshots.add(field.type.canonicalText)
             fieldParameterNames.add(fieldParameter.parameterName)
         }
 
@@ -168,10 +174,12 @@ class JavaMakeStaticSelectionResolver(
 
         return JavaMakeStaticSelectionResolution.Success(
             JavaMakeStaticPreparation(
-                memberPointer = SmartPointerManager.getInstance(project).createSmartPsiElementPointer(member),
+                memberPointer = pointerManager.createSmartPsiElementPointer(member),
+                memberOwnerPointer = pointerManager.createSmartPsiElementPointer(memberOwner),
                 fieldPointers = fieldPointers,
                 memberTextSnapshot = member.text,
                 fieldTextSnapshots = fieldTextSnapshots,
+                fieldTypeSnapshots = fieldTypeSnapshots,
                 pathInProject = projectRelativePath(project, memberTarget.file.virtualFile.path),
                 memberKind = memberKind,
                 memberName = memberName,

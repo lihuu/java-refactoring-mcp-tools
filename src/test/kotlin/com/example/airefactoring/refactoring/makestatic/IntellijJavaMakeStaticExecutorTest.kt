@@ -11,6 +11,7 @@ import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiModifier
@@ -165,6 +166,11 @@ class IntellijJavaMakeStaticExecutorTest : LightJavaCodeInsightFixtureTestCase()
             "caller must now invoke statically with the receiver as argument:\n${callerAfter.text}",
             call!!.text == "Invoice.applyDiscount(invoice)",
         )
+
+        val persistedInvoice = Files.readString(Path.of(project.basePath!!, "example/Invoice.java"))
+        val persistedCaller = Files.readString(Path.of(project.basePath!!, "example/Checkout.java"))
+        assertTrue("native target edits must be persisted", persistedInvoice.contains("static int applyDiscount"))
+        assertTrue("native usage edits must be persisted", persistedCaller.contains("Invoice.applyDiscount(invoice)"))
     }
 
     fun testMakesInnerClassStatic() {
@@ -395,7 +401,148 @@ class IntellijJavaMakeStaticExecutorTest : LightJavaCodeInsightFixtureTestCase()
         assertEquals("member file must be unchanged by the executor", afterEditText, staleFieldFile.text)
     }
 
+    fun testRejectsFieldWithDifferentOwnerEvenWhenTextAndTypeMatch() {
+        val file = mirrorFixture(
+            "example/FieldOwner.java",
+            """
+                package example;
+
+                public class FieldOwner {
+                    private int amount;
+
+                    public int applyDiscount() {
+                        return amount;
+                    }
+                }
+
+                class OtherOwner {
+                    private int amount;
+                }
+            """.trimIndent(),
+        )
+        val preparation = resolvePreparation(
+            "example/FieldOwner.java",
+            "applyDiscount",
+            classParameterName = null,
+            fieldParameters = listOf(fieldParameter("example/FieldOwner.java", "amount", "a")),
+            replaceUsages = true,
+        )
+        val otherField = file.classes.single { it.name == "OtherOwner" }.fields.single()
+        val mismatchedPreparation = preparation.copy(
+            fieldPointers = listOf(SmartPointerManager.getInstance(project).createSmartPsiElementPointer(otherField)),
+            fieldTextSnapshots = listOf(otherField.text),
+            fieldTypeSnapshots = listOf(otherField.type.canonicalText),
+        )
+        val before = file.text
+
+        assertPreparationRejected(mismatchedPreparation)
+
+        assertEquals("executor must not mutate a field-owner mismatch", before, file.text)
+    }
+
+    fun testRejectsSelectedFieldThatBecameStaticEvenWhenSnapshotsMatch() {
+        val file = mirrorFixture(
+            "example/StaticField.java",
+            """
+                package example;
+
+                public class StaticField {
+                    private int selected;
+                    private static int amount;
+
+                    public int applyDiscount() {
+                        return selected;
+                    }
+                }
+            """.trimIndent(),
+        )
+        val preparation = resolvePreparation(
+            "example/StaticField.java",
+            "applyDiscount",
+            classParameterName = null,
+            fieldParameters = listOf(fieldParameter("example/StaticField.java", "selected", "selected")),
+            replaceUsages = true,
+        )
+        val staticField = file.classes.single().findFieldByName("amount", false)!!
+        val mismatchedPreparation = preparation.copy(
+            fieldPointers = listOf(SmartPointerManager.getInstance(project).createSmartPsiElementPointer(staticField)),
+            fieldTextSnapshots = listOf(staticField.text),
+            fieldTypeSnapshots = listOf(staticField.type.canonicalText),
+        )
+        val before = file.text
+
+        assertPreparationRejected(mismatchedPreparation)
+
+        assertEquals("executor must not mutate a static-field mismatch", before, file.text)
+    }
+
+    fun testRejectsFieldWhoseResolvedTypeChangedWithoutDeclarationTextChange() {
+        mirrorFixture(
+            "example/first/Value.java",
+            """
+                package example.first;
+
+                public final class Value {
+                }
+            """.trimIndent(),
+        )
+        mirrorFixture(
+            "example/second/Value.java",
+            """
+                package example.second;
+
+                public final class Value {
+                }
+            """.trimIndent(),
+        )
+        val file = mirrorFixture(
+            "example/TypeDrift.java",
+            """
+                package example;
+
+                import example.first.Value;
+
+                public class TypeDrift {
+                    private Value amount;
+
+                    public int applyDiscount() {
+                        return 0;
+                    }
+                }
+            """.trimIndent(),
+        )
+        val preparation = resolvePreparation(
+            "example/TypeDrift.java",
+            "applyDiscount",
+            classParameterName = null,
+            fieldParameters = listOf(fieldParameter("example/TypeDrift.java", "amount", "amount")),
+            replaceUsages = true,
+        )
+        val document = documentOf(file)
+        WriteCommandAction.runWriteCommandAction(project) {
+            val oldImport = "import example.first.Value;"
+            val start = document.text.indexOf(oldImport)
+            document.replaceString(start, start + oldImport.length, "import example.second.Value;")
+        }
+        PsiDocumentManager.getInstance(project).commitDocument(document)
+        myFixture.psiManager.dropResolveCaches()
+        val afterImportChange = file.text
+
+        assertPreparationRejected(preparation)
+
+        assertEquals("executor must not mutate a type-drift mismatch", afterImportChange, file.text)
+    }
+
     // --- helpers ---
+
+    private fun assertPreparationRejected(preparation: JavaMakeStaticPreparation) {
+        try {
+            runExecutor { makeStaticExecutor(project, preparation) }
+            fail("expected a stale-preparation rejection")
+        } catch (expected: JavaMakeStaticPreparationException) {
+            assertTrue(expected.message!!.isNotBlank())
+        }
+    }
 
     private fun resolvePreparation(
         path: String,

@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring.makestatic
 
 import com.example.airefactoring.mcp.McpRefactoringErrorCode
 import com.intellij.psi.PsiField
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiTypeParameterListOwner
 import com.intellij.psi.SmartPsiElementPointer
 
@@ -15,9 +16,11 @@ enum class JavaMakeStaticMemberKind { METHOD, CLASS }
  */
 data class JavaMakeStaticPreparation(
     val memberPointer: SmartPsiElementPointer<out PsiTypeParameterListOwner>,
+    val memberOwnerPointer: SmartPsiElementPointer<PsiClass>,
     val fieldPointers: List<SmartPsiElementPointer<PsiField>>,
     val memberTextSnapshot: String,
     val fieldTextSnapshots: List<String>,
+    val fieldTypeSnapshots: List<String>,
     val pathInProject: String,
     val memberKind: JavaMakeStaticMemberKind,
     val memberName: String,
