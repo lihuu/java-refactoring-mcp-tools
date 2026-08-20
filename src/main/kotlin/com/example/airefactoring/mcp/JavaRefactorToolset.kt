@@ -8,6 +8,7 @@ import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOp
 import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
 import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
+import com.example.airefactoring.refactoring.converttoinstancemethod.ConvertToInstanceMethodOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -29,6 +30,7 @@ class JavaRefactorToolset(
     private val javaSafeDeleteOperation: JavaSafeDeleteOperation = JavaSafeDeleteOperation(),
     private val moveInstanceMethodOperation: MoveInstanceMethodOperation = MoveInstanceMethodOperation(),
     private val javaMakeStaticOperation: JavaMakeStaticOperation = JavaMakeStaticOperation(),
+    private val convertToInstanceMethodOperation: ConvertToInstanceMethodOperation = ConvertToInstanceMethodOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -255,6 +257,56 @@ class JavaRefactorToolset(
         SourceRange(startLine, startColumn, endLine, endColumn),
     )
 
+    @McpTool
+    @McpDescription(CONVERT_TO_INSTANCE_METHOD_DESCRIPTION)
+    suspend fun java_convert_to_instance_method(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the static method declaration name")
+        methodStartLine: Int,
+        @McpDescription("1-based inclusive start column of the static method declaration name")
+        methodStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the static method declaration name")
+        methodEndLine: Int,
+        @McpDescription("1-based exclusive end column of the static method declaration name")
+        methodEndColumn: Int,
+        @McpDescription("Receiver target kind: 'parameter' or 'containing_class'")
+        targetKind: String,
+        @McpDescription("1-based inclusive start line of the target parameter name, or null for containing_class")
+        targetStartLine: Int? = null,
+        @McpDescription("1-based inclusive start column of the target parameter name, or null for containing_class")
+        targetStartColumn: Int? = null,
+        @McpDescription("1-based line containing the exclusive end position of the target parameter name, or null for containing_class")
+        targetEndLine: Int? = null,
+        @McpDescription("1-based exclusive end column of the target parameter name, or null for containing_class")
+        targetEndColumn: Int? = null,
+        @McpDescription("Optional new visibility: null retains current, or 'public', 'protected', 'private', 'packageLocal'")
+        newVisibility: String? = null,
+        @McpDescription("Explicit approval for an interface target without extension-method support that has implementations")
+        confirmInterfaceImplementations: Boolean = false,
+    ): String {
+        val methodRange = SourceRange(methodStartLine, methodStartColumn, methodEndLine, methodEndColumn)
+        val targetRange = when {
+            targetStartLine == null && targetStartColumn == null && targetEndLine == null && targetEndColumn == null -> null
+            targetStartLine != null && targetStartColumn != null && targetEndLine != null && targetEndColumn != null ->
+                SourceRange(targetStartLine, targetStartColumn, targetEndLine, targetEndColumn)
+            else -> {
+                return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                    com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                    "Target coordinates must be all present or all absent; partial tuples are not allowed.",
+                ).toJson()
+            }
+        }
+        return convertToInstanceMethodOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            methodRange,
+            targetKind,
+            targetRange,
+            newVisibility,
+            confirmInterfaceImplementations,
+        )
+    }
+
     private companion object {
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
@@ -402,6 +454,24 @@ class JavaRefactorToolset(
                 "and run diagnostics, build, and tests after success. Never use direct text edits, " +
                 "patches, whole-file rewrites, or direct PSI mutation as a fallback when the " +
                 "native refactoring refuses the target. Returns JSON with ok=true on success or " +
+                "ok=false with a stable error code on failure."
+
+        const val CONVERT_TO_INSTANCE_METHOD_DESCRIPTION =
+            "Converts one Java static method to an instance method using IntelliJ's native " +
+                "Convert to Instance Method refactoring, driven headlessly with no dialog. Use it " +
+                "after reading the static method, choosing the native receiver explicitly and " +
+                "waiting for user approval. The receiver is either 'parameter' (a resolvable " +
+                "project-class parameter of the selected method, supplied with all four target " +
+                "coordinates) or 'containing_class' (no target coordinates, using the method's " +
+                "owning class as receiver with native named/non-enum/non-inner/no-arg-constructor " +
+                "conditions). Pass the exact 1-based declaration-name ranges (start inclusive, end " +
+                "exclusive), the AI-chosen newVisibility (null retains current visibility, otherwise " +
+                "'public', 'protected', 'private', 'packageLocal'), and explicit " +
+                "confirmInterfaceImplementations only when a target interface without extension " +
+                "support needs implementations (false refuses without mutation). The plugin makes " +
+                "none of these decisions. Operates only on Java source via " +
+                "ConvertToInstanceMethodProcessor; never uses direct text edits, patches, file " +
+                "rewrites, or PSI mutation as a fallback. Returns JSON with ok=true on success or " +
                 "ok=false with a stable error code on failure."
     }
 }
