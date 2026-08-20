@@ -167,14 +167,17 @@ class JavaSafeDeleteTargetResolverTest : LightJavaCodeInsightFixtureTestCase() {
         val content = markedText.substring(0, start) +
             markedText.substring(start + START_MARKER.length, end) +
             markedText.substring(end + END_MARKER.length)
+        val selectedText = markedText.substring(start + START_MARKER.length, end)
         myFixture.configureByText(fileName, content)
-        val document = myFixture.editor.document
-        val startOffset = start
-        val endOffset = end - START_MARKER.length
-        myFixture.editor.selectionModel.setSelection(startOffset, endOffset)
-        mirrorRealFile(fileName, content)
+        val vf = mirrorRealFile(fileName, content)
         com.intellij.testFramework.IndexingTestUtil.waitUntilIndexesAreReady(project)
-        return rangeFromOffsets(document, startOffset, endOffset)
+        // Compute range from the real file's document to avoid stale-editor offset mismatches
+        val realDoc = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getDocument(vf)!!
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitDocument(realDoc)
+        val startOffset = realDoc.text.indexOf(selectedText)
+        require(startOffset >= 0) { "selected text '$selectedText' missing from real document: ${realDoc.text}" }
+        val endOffset = startOffset + selectedText.length
+        return rangeFromOffsets(realDoc, startOffset, endOffset)
     }
 
     private fun rangeFromOffsets(document: Document, startOffset: Int, endOffset: Int): SourceRange {
@@ -191,8 +194,14 @@ class JavaSafeDeleteTargetResolverTest : LightJavaCodeInsightFixtureTestCase() {
     private fun mirrorRealFile(fileName: String, text: String): VirtualFile {
         val target = Path.of(project.basePath!!, fileName)
         Files.createDirectories(target.parent)
-        Files.writeString(target, text)
-        return LocalFileSystem.getInstance().refreshAndFindFileByPath(target.toString())!!
+        if (!Files.exists(target)) Files.createFile(target)
+        val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(target.toString())
+            ?: LocalFileSystem.getInstance().findFileByPath(target.toString())!!
+        com.intellij.openapi.application.WriteAction.run<RuntimeException> {
+            com.intellij.openapi.vfs.VfsUtil.saveText(vf, text)
+        }
+        com.intellij.psi.PsiDocumentManager.getInstance(project).commitAllDocuments()
+        return vf
     }
 
     private fun requireFailure(
