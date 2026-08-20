@@ -30,10 +30,15 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
         project: Project,
         preparation: EncapsulateFieldsPreparation,
     ): EncapsulateFieldsExecutionResult {
+        // Validate pointers on EDT, then generate prototypes off EDT to avoid SlowOperations on EDT
+        val fields = withContext(Dispatchers.EDT) { requireCurrentFields(preparation) }
+        val containingClass = withContext(Dispatchers.EDT) { requireCurrentContainingClass(preparation, fields) }
+        val descriptors = withContext(Dispatchers.Default) {
+            ReadAction.compute<List<FieldDescriptor>, RuntimeException> {
+                buildFieldDescriptors(fields, preparation)
+            }
+        }
         val prepared = withContext(Dispatchers.EDT) {
-            val fields = requireCurrentFields(preparation)
-            val containingClass = requireCurrentContainingClass(preparation, fields)
-            val descriptors = buildFieldDescriptors(fields, preparation)
             val descriptor = buildDescriptor(containingClass, descriptors, preparation)
             PreparedNativeExecution(
                 containingClass = containingClass,
