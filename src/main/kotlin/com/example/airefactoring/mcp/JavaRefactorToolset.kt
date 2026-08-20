@@ -9,6 +9,7 @@ import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOpera
 import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.example.airefactoring.refactoring.converttoinstancemethod.ConvertToInstanceMethodOperation
+import com.example.airefactoring.refactoring.encapsulatefields.EncapsulateFieldsOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -31,6 +32,7 @@ class JavaRefactorToolset(
     private val moveInstanceMethodOperation: MoveInstanceMethodOperation = MoveInstanceMethodOperation(),
     private val javaMakeStaticOperation: JavaMakeStaticOperation = JavaMakeStaticOperation(),
     private val convertToInstanceMethodOperation: ConvertToInstanceMethodOperation = ConvertToInstanceMethodOperation(),
+    private val encapsulateFieldsOperation: EncapsulateFieldsOperation = EncapsulateFieldsOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -258,6 +260,68 @@ class JavaRefactorToolset(
     )
 
     @McpTool
+    @McpDescription(JAVA_ENCAPSULATE_FIELDS_DESCRIPTION)
+    suspend fun java_encapsulate_fields(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("Ordered 1-based start lines of the field declaration names to encapsulate; this list and every other field/getter/setter list use the same index order")
+        fieldStartLines: List<Int>,
+        @McpDescription("Ordered 1-based start columns of the field declaration names, aligned with fieldStartLines")
+        fieldStartColumns: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end lines of the field declaration names, aligned with fieldStartLines")
+        fieldEndLines: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end columns of the field declaration names, aligned with fieldStartLines")
+        fieldEndColumns: List<Int>,
+        @McpDescription("AI-selected Java getter names, aligned with fieldStartLines")
+        getterNames: List<String>,
+        @McpDescription("AI-selected Java setter names, aligned with fieldStartLines")
+        setterNames: List<String>,
+        @McpDescription("Field visibility after encapsulation: null or 'asIs' retains current, otherwise 'private', 'protected', or 'packageLocal'")
+        fieldsVisibility: String? = null,
+        @McpDescription("Accessor visibility: 'public', 'protected', 'packageLocal', or 'private'")
+        accessorsVisibility: String,
+        @McpDescription("Whether to generate and use getters")
+        encapsulateGet: Boolean,
+        @McpDescription("Whether to generate and use setters")
+        encapsulateSet: Boolean,
+        @McpDescription("Whether to rewrite references even when the field is already accessible at the use site")
+        useAccessorsWhenAccessible: Boolean,
+    ): String {
+        if (
+            fieldStartLines.size != fieldStartColumns.size ||
+            fieldStartLines.size != fieldEndLines.size ||
+            fieldStartLines.size != fieldEndColumns.size ||
+            fieldStartLines.size != getterNames.size ||
+            fieldStartLines.size != setterNames.size
+        ) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "Field range and accessor name lists must have equal lengths.",
+            ).toJson()
+        }
+        if (fieldStartLines.isEmpty()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "At least one field must be selected.",
+            ).toJson()
+        }
+        return encapsulateFieldsOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            fieldStartLines,
+            fieldStartColumns,
+            fieldEndLines,
+            fieldEndColumns,
+            getterNames,
+            setterNames,
+            fieldsVisibility,
+            accessorsVisibility,
+            encapsulateGet,
+            encapsulateSet,
+            useAccessorsWhenAccessible,
+        )
+    }
+
+    @McpTool
     @McpDescription(CONVERT_TO_INSTANCE_METHOD_DESCRIPTION)
     suspend fun java_convert_to_instance_method(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -473,5 +537,20 @@ class JavaRefactorToolset(
                 "ConvertToInstanceMethodProcessor; never uses direct text edits, patches, file " +
                 "rewrites, or PSI mutation as a fallback. Returns JSON with ok=true on success or " +
                 "ok=false with a stable error code on failure."
+
+        const val JAVA_ENCAPSULATE_FIELDS_DESCRIPTION =
+            "Encapsulate Fields encapsulates 1..N fields of the same Java class using IntelliJ's native " +
+                "Encapsulate Fields refactoring, driven headlessly with no dialog. Use it after reading the " +
+                "containing class, choosing the fields and complete accessor policy explicitly, and waiting for " +
+                "user approval. The agent explicitly selects ordered field declaration-name ranges (start inclusive, " +
+                "end exclusive), ordered getterNames/setterNames, fieldsVisibility (null or 'asIs' retains current, " +
+                "otherwise 'private', 'protected', or 'packageLocal'), accessorsVisibility ('public', 'protected', " +
+                "'packageLocal', 'private'), encapsulateGet, encapsulateSet, and useAccessorsWhenAccessible. The " +
+                "plugin neither fills in nor changes those decisions; Javadoc is fixed at 0 and targetClass is " +
+                "fixed at the containing class. This is Java-only, native, and generates correct getter/setter " +
+                "prototypes via JavaEncapsulateFieldHelper, rewrites every field reference, and reports native " +
+                "conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct " +
+                "PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error " +
+                "code on failure with one native Undo."
     }
 }
