@@ -37,17 +37,21 @@ class IntellijExtractInterfaceExecutor internal constructor(
             }
         }
 
-        // Build memberInfos (reads only)
-        val memberInfos = withContext(Dispatchers.Default) {
-            ReadAction.compute<Array<MemberInfo>, RuntimeException> {
-                members.map { member ->
+        // Build memberInfos (reads only) and locate target directory info off EDT to avoid SlowOperations
+        val memberInfosAndPackageInfo = withContext(Dispatchers.Default) {
+            ReadAction.compute<Pair<Array<MemberInfo>, PackageLookupResult>, RuntimeException> {
+                val infos = members.map { member ->
                     MemberInfo(member).apply {
                         isChecked = true
                         if (member is com.intellij.psi.PsiMethod) isToAbstract = true
                     }
                 }.toTypedArray()
+                val pkgInfo = lookupTargetPackage(project, sourceClass, preparation.targetPackage)
+                infos to pkgInfo
             }
         }
+        val memberInfos = memberInfosAndPackageInfo.first
+        val packageInfo = memberInfosAndPackageInfo.second
 
         // Find usages before mutation (for affected files & count)
         val usageFactsBefore = withContext(Dispatchers.Default) {
@@ -66,8 +70,28 @@ class IntellijExtractInterfaceExecutor internal constructor(
             requireCurrentSourceClass(preparation)
             requireCurrentMembers(preparation, sourceClass)
 
-            // Resolve target directory (may create package) before conflict checks
-            val targetDirectory = resolveTargetDirectory(project, sourceClass, preparation.targetPackage)
+            // Resolve target directory — use off-EDT lookup result, create if needed inside WriteAction
+            val targetDirectory = packageInfo.existingDirectory ?: run {
+                // needs creation — already validated off EDT that package needs creation, do it now inside write
+                com.intellij.openapi.application.WriteAction.compute<PsiDirectory, RuntimeException> {
+                    val pkg = packageInfo.targetPackage
+                        ?: throw ExtractInterfacePreparationException("Target package missing for directory creation.")
+                    val sourceFile = sourceClass.containingFile?.virtualFile
+                        ?: throw ExtractInterfacePreparationException("Unable to resolve source file for package creation.")
+                    val sourceRoot = com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).getSourceRootForFile(sourceFile)
+                        ?: throw ExtractInterfacePreparationException("Unable to resolve source root for package creation.")
+                    var currentDir = PsiManager.getInstance(project).findDirectory(sourceRoot)
+                        ?: throw ExtractInterfacePreparationException("Unable to find source root directory.")
+                    for (segment in pkg.split(".")) {
+                        var next = currentDir.findSubdirectory(segment)
+                        if (next == null) {
+                            next = currentDir.createSubdirectory(segment)
+                        }
+                        currentDir = next
+                    }
+                    currentDir
+                }
+            }
 
             // Conflict checks before mutation (needs read)
             val qualified = preparation.effectiveQualifiedNameSnapshot
@@ -217,6 +241,36 @@ class IntellijExtractInterfaceExecutor internal constructor(
             currentDir
         }
     }
+
+    private fun lookupTargetPackage(project: Project, sourceClass: PsiClass, targetPackage: String?): PackageLookupResult {
+        if (targetPackage == null) {
+            val dir = sourceClass.containingFile?.containingDirectory
+                ?: throw ExtractInterfacePreparationException("Unable to resolve source directory.")
+            return PackageLookupResult(dir, false, null)
+        }
+        val psiPackage = JavaPsiFacade.getInstance(project).findPackage(targetPackage)
+        if (psiPackage != null) {
+            val dirs = psiPackage.getDirectories(GlobalSearchScope.projectScope(project))
+            if (dirs.isNotEmpty()) {
+                val sourceFile = sourceClass.containingFile?.virtualFile
+                val sourceRoot = sourceFile?.let { com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).getSourceRootForFile(it) }
+                if (sourceRoot != null) {
+                    for (dir in dirs) {
+                        val dirRoot = com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).getSourceRootForFile(dir.virtualFile)
+                        if (dirRoot == sourceRoot) return PackageLookupResult(dir, false, targetPackage)
+                    }
+                }
+                return PackageLookupResult(dirs[0], false, targetPackage)
+            }
+        }
+        return PackageLookupResult(null, true, targetPackage)
+    }
+
+    private data class PackageLookupResult(
+        val existingDirectory: PsiDirectory?,
+        val needsCreation: Boolean,
+        val targetPackage: String?,
+    )
 
     private fun projectRelativeAffectedFiles(
         project: Project,
