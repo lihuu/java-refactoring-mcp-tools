@@ -642,6 +642,32 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testExtractSuperclassSuccessContainsExtractSuperclassFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.extractSuperclassSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Service.java",
+                sourceClass = "example.Service",
+                superclassName = "ServiceSuper",
+                qualifiedSuperclassName = "example.api.ServiceSuper",
+                memberNames = listOf("doIt", "COUNT"),
+                targetPackage = "example.api",
+                nativeUsageCount = 1,
+                affectedFiles = listOf("example/Service.java", "example/api/ServiceSuper.java"),
+                summary = "Extracted superclass example.api.ServiceSuper from example.Service with 2 member(s).",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_extract_superclass", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("example.Service", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("ServiceSuper", obj.getValue("superclassName").jsonPrimitive.content)
+        assertEquals("example.api.ServiceSuper", obj.getValue("qualifiedSuperclassName").jsonPrimitive.content)
+        assertEquals(listOf("doIt", "COUNT"), obj.getValue("memberNames").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("example.api", obj.getValue("targetPackage").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+        assertFalse(obj.containsKey("interfaceName"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))
