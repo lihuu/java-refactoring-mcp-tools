@@ -71,6 +71,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_encapsulate_fields missing", "java_encapsulate_fields" in names)
         assertTrue("java_extract_interface missing", "java_extract_interface" in names)
         assertTrue("java_extract_superclass missing", "java_extract_superclass" in names)
+        assertTrue("java_pull_members_up missing", "java_pull_members_up" in names)
+        assertTrue("java_push_members_down missing", "java_push_members_down" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -478,6 +480,43 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             assertEquals("array", schema.getValue("type").jsonPrimitive.content)
             assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
         }
+    }
+
+    fun testPullMembersUpSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_pull_members_up" }
+        assertTrue(descriptor.description.contains("Pull Members Up"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertTrue(descriptor.description.contains("Java"))
+        assertEquals(
+            setOf("pathInProject","sourceSubclassStartLine","sourceSubclassStartColumn","sourceSubclassEndLine","sourceSubclassEndColumn","memberStartLines","memberStartColumns","memberEndLines","memberEndColumns","targetSuperclassFqn","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        val props = descriptor.inputSchema.propertiesSchema
+        listOf("memberStartLines","memberStartColumns","memberEndLines","memberEndColumns").forEach { name ->
+            val schema = props.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
+    }
+
+    fun testPushMembersDownSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_push_members_down" }
+        assertTrue(descriptor.description.contains("Push Members Down"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertTrue(descriptor.description.contains("Java"))
+        assertEquals(
+            setOf("pathInProject","sourceSuperclassStartLine","sourceSuperclassStartColumn","sourceSuperclassEndLine","sourceSuperclassEndColumn","memberStartLines","memberStartColumns","memberEndLines","memberEndColumns","targetSubclassFqns","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        val props = descriptor.inputSchema.propertiesSchema
+        listOf("memberStartLines","memberStartColumns","memberEndLines","memberEndColumns").forEach { name ->
+            val schema = props.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
+        val target = props.getValue("targetSubclassFqns").jsonObject
+        assertEquals("array", target.getValue("type").jsonPrimitive.content)
+        assertEquals("string", target.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {

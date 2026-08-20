@@ -12,6 +12,8 @@ import com.example.airefactoring.refactoring.converttoinstancemethod.ConvertToIn
 import com.example.airefactoring.refactoring.encapsulatefields.EncapsulateFieldsOperation
 import com.example.airefactoring.refactoring.extractinterface.ExtractInterfaceOperation
 import com.example.airefactoring.refactoring.extractsuperclass.ExtractSuperclassOperation
+import com.example.airefactoring.refactoring.pullup.PullMembersUpOperation
+import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -37,6 +39,8 @@ class JavaRefactorToolset(
     private val encapsulateFieldsOperation: EncapsulateFieldsOperation = EncapsulateFieldsOperation(),
     private val extractInterfaceOperation: ExtractInterfaceOperation = ExtractInterfaceOperation(),
     private val extractSuperclassOperation: ExtractSuperclassOperation = ExtractSuperclassOperation(),
+    private val pullMembersUpOperation: PullMembersUpOperation = PullMembersUpOperation(),
+    private val pushMembersDownOperation: PushMembersDownOperation = PushMembersDownOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -440,6 +444,120 @@ class JavaRefactorToolset(
     }
 
     @McpTool
+    @McpDescription(JAVA_PULL_MEMBERS_UP_DESCRIPTION)
+    suspend fun java_pull_members_up(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the source subclass declaration name")
+        sourceSubclassStartLine: Int,
+        @McpDescription("1-based inclusive start column of the source subclass declaration name")
+        sourceSubclassStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the source subclass declaration name")
+        sourceSubclassEndLine: Int,
+        @McpDescription("1-based exclusive end column of the source subclass declaration name")
+        sourceSubclassEndColumn: Int,
+        @McpDescription("Ordered 1-based start lines of the member declaration names to pull up; this list and every other member list use the same index order")
+        memberStartLines: List<Int>,
+        @McpDescription("Ordered 1-based start columns of the member declaration names, aligned with memberStartLines")
+        memberStartColumns: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end lines of the member declaration names, aligned with memberStartLines")
+        memberEndLines: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end columns of the member declaration names, aligned with memberStartLines")
+        memberEndColumns: List<Int>,
+        @McpDescription("Qualified name of the existing direct superclass to pull members into")
+        targetSuperclassFqn: String,
+    ): String {
+        if (
+            memberStartLines.size != memberStartColumns.size ||
+            memberStartLines.size != memberEndLines.size ||
+            memberStartLines.size != memberEndColumns.size
+        ) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "Member range lists must have equal lengths.",
+            ).toJson()
+        }
+        if (memberStartLines.isEmpty()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "At least one member must be selected.",
+            ).toJson()
+        }
+        return pullMembersUpOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            sourceSubclassStartLine,
+            sourceSubclassStartColumn,
+            sourceSubclassEndLine,
+            sourceSubclassEndColumn,
+            memberStartLines,
+            memberStartColumns,
+            memberEndLines,
+            memberEndColumns,
+            targetSuperclassFqn,
+        )
+    }
+
+    @McpTool
+    @McpDescription(JAVA_PUSH_MEMBERS_DOWN_DESCRIPTION)
+    suspend fun java_push_members_down(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the source superclass declaration name")
+        sourceSuperclassStartLine: Int,
+        @McpDescription("1-based inclusive start column of the source superclass declaration name")
+        sourceSuperclassStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the source superclass declaration name")
+        sourceSuperclassEndLine: Int,
+        @McpDescription("1-based exclusive end column of the source superclass declaration name")
+        sourceSuperclassEndColumn: Int,
+        @McpDescription("Ordered 1-based start lines of the member declaration names to push down; this list and every other member list use the same index order")
+        memberStartLines: List<Int>,
+        @McpDescription("Ordered 1-based start columns of the member declaration names, aligned with memberStartLines")
+        memberStartColumns: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end lines of the member declaration names, aligned with memberStartLines")
+        memberEndLines: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end columns of the member declaration names, aligned with memberStartLines")
+        memberEndColumns: List<Int>,
+        @McpDescription("Qualified names of the existing direct subclasses to push members into")
+        targetSubclassFqns: List<String>,
+    ): String {
+        if (
+            memberStartLines.size != memberStartColumns.size ||
+            memberStartLines.size != memberEndLines.size ||
+            memberStartLines.size != memberEndColumns.size
+        ) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "Member range lists must have equal lengths.",
+            ).toJson()
+        }
+        if (memberStartLines.isEmpty()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "At least one member must be selected.",
+            ).toJson()
+        }
+        if (targetSubclassFqns.isEmpty()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "At least one target subclass must be specified.",
+            ).toJson()
+        }
+        return pushMembersDownOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            sourceSuperclassStartLine,
+            sourceSuperclassStartColumn,
+            sourceSuperclassEndLine,
+            sourceSuperclassEndColumn,
+            memberStartLines,
+            memberStartColumns,
+            memberEndLines,
+            memberEndColumns,
+            targetSubclassFqns,
+        )
+    }
+
+    @McpTool
     @McpDescription(CONVERT_TO_INSTANCE_METHOD_DESCRIPTION)
     suspend fun java_convert_to_instance_method(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -680,5 +798,15 @@ class JavaRefactorToolset(
             "Extract Superclass creates a new Java abstract superclass from 1..N public members of one exact Java class using IntelliJ's native " +
                 "Extract Superclass refactoring, driven headlessly with no dialog. Use it after reading the source class and its members, choosing the members and superclass identity explicitly, and waiting for " +
                 "user approval. The agent explicitly selects the source class declaration-name range (start inclusive, end exclusive), ordered member declaration-name ranges (start inclusive, end exclusive) of public instance methods and public static final fields belonging to that class, a simple superclassName, and an optional targetPackage (null or empty means same package as source; otherwise a dot-separated qualified name). The plugin neither fills in nor changes those decisions; the source class always extends the new abstract superclass, methods become abstract, Javadoc is fixed at 0, and only public members are extractable in V1. This is Java-only, native, creates the new superclass file and wires extends, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
+
+        const val JAVA_PULL_MEMBERS_UP_DESCRIPTION =
+            "Pull Members Up moves 1..N public members of one exact Java subclass into its existing direct superclass using IntelliJ's native " +
+                "Pull Members Up refactoring, driven headlessly with no dialog. Use it after reading the subclass, its members, and the target superclass, choosing the members and hierarchy target explicitly, and waiting for " +
+                "user approval. The agent explicitly selects the source subclass declaration-name range (start inclusive, end exclusive), ordered member declaration-name ranges (start inclusive, end exclusive) of public instance methods and public static final fields belonging to that subclass, and the qualified name of the direct superclass. The plugin neither fills in nor changes those decisions; methods become abstract in the superclass, Javadoc is fixed at 0, and only public members are movable in V1. This is Java-only, native, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
+
+        const val JAVA_PUSH_MEMBERS_DOWN_DESCRIPTION =
+            "Push Members Down moves 1..N public members of one exact Java superclass into its existing direct subclasses using IntelliJ's native " +
+                "Push Members Down refactoring, driven headlessly with no dialog. Use it after reading the superclass, its members, and the target subclasses, choosing the members and hierarchy targets explicitly, and waiting for " +
+                "user approval. The agent explicitly selects the source superclass declaration-name range (start inclusive, end exclusive), ordered member declaration-name ranges (start inclusive, end exclusive) of public instance methods and public static final fields belonging to that superclass, and the qualified names of the direct subclasses. The plugin neither fills in nor changes those decisions; methods become abstract in the source and concrete in each target, Javadoc is fixed at 0, and only public members are movable in V1. This is Java-only, native, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
     }
 }
