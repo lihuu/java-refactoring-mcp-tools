@@ -567,6 +567,30 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(keys.contains("affectedFiles"))
     }
 
+    fun testConvertToInstanceMethodSuccessContainsConvertFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.convertToInstanceMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Util.java",
+                methodName = "format",
+                targetKind = "parameter",
+                targetDescription = "parameter customer of type example.Customer",
+                targetClassQualifiedName = "example.Customer",
+                newVisibility = "public",
+                nativeUsageCount = 2,
+                affectedFiles = listOf("example/Caller.java"),
+                summary = "Converted format to an instance method of example.Customer.",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_convert_to_instance_method", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("format", obj.getValue("methodName").jsonPrimitive.content)
+        assertEquals("parameter", obj.getValue("targetKind").jsonPrimitive.content)
+        assertEquals("example.Customer", obj.getValue("targetClassQualifiedName").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("nativeUsageCount").jsonPrimitive.int)
+        assertFalse(obj.containsKey("code"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))

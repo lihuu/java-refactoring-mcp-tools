@@ -15,6 +15,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
+/**
+ * Headless executor for [ConvertToInstanceMethodProcessor].
+ *
+ * `ConvertToInstanceMethodProcessor` is `final` in platform 261, so the headless
+ * `showConflicts` override / `findUsages` exposure used by older refactorings is
+ * not applicable. Instead this executor:
+ * - invokes the protected `findUsages` via a cached reflective lookup, and
+ * - drives the processor with `ide.performance.skip.refactoring.dialogs=true`
+ *   so that [BaseRefactoringProcessor.ConflictsInTestsException] is thrown rather
+ *   than showing a dialog. The system property is confined to the `run()` call
+ *   and restored in `finally` (no global leak), with `TestDialog` assertions in
+ *   tests ensuring no dialog appears.
+ */
 class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor {
 
     override suspend fun convert(
@@ -35,7 +48,8 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
             validateFreshPreparation(preparation)
             prepared.processor.setPreviewUsages(false)
             try {
-                // Ensure conflicts throw instead of showing a dialog, even outside unit-test mode.
+                // Confined property mutation: only around processor.run() so conflicts
+                // throw ConflictsInTestsException instead of opening a dialog.
                 val previous = System.getProperty("ide.performance.skip.refactoring.dialogs")
                 System.setProperty("ide.performance.skip.refactoring.dialogs", "true")
                 try {
@@ -221,8 +235,7 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
     )
 
     private fun findUsagesNative(processor: ConvertToInstanceMethodProcessor): Array<UsageInfo> {
-        val method = findUsagesMethod(processor)
-        method.isAccessible = true
+        val method = cachedFindUsagesMethod ?: findUsagesMethod(processor).also { cachedFindUsagesMethod = it }
         @Suppress("UNCHECKED_CAST")
         return method.invoke(processor) as Array<UsageInfo>
     }
@@ -231,11 +244,16 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
         var clazz: Class<*> = processor.javaClass
         while (clazz != Any::class.java) {
             try {
-                return clazz.getDeclaredMethod("findUsages")
+                return clazz.getDeclaredMethod("findUsages").apply { isAccessible = true }
             } catch (_: NoSuchMethodException) {
                 clazz = clazz.superclass ?: break
             }
         }
         throw IllegalStateException("findUsages method not found on ConvertToInstanceMethodProcessor")
+    }
+
+    companion object {
+        @Volatile
+        private var cachedFindUsagesMethod: java.lang.reflect.Method? = null
     }
 }

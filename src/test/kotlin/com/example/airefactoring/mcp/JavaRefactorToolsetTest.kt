@@ -67,6 +67,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_safe_delete missing", "java_safe_delete" in names)
         assertTrue("java_move_instance_method missing", "java_move_instance_method" in names)
         assertTrue("java_make_static missing", "java_make_static" in names)
+        assertTrue("java_convert_to_instance_method missing", "java_convert_to_instance_method" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -410,6 +411,16 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(description.contains("inner class"))
         assertTrue(description.contains("explicitly"))
         assertTrue(description.contains("Never use direct text edits"))
+    }
+
+    fun testConvertToInstanceMethodSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_convert_to_instance_method" }
+        assertTrue(descriptor.description.contains("Convert to Instance Method"))
+        assertTrue(descriptor.description.lowercase().contains("never uses direct text edits") || descriptor.description.contains("Never use direct text edits"))
+        assertEquals(
+            setOf("pathInProject","methodStartLine","methodStartColumn","methodEndLine","methodEndColumn","targetKind","targetStartLine","targetStartColumn","targetEndLine","targetEndColumn","newVisibility","confirmInterfaceImplementations","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {

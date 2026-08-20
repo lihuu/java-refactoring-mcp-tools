@@ -17,6 +17,7 @@ import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.search.searches.ClassInheritorsSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtil
+import com.intellij.psi.PsiImplicitClass
 import java.nio.file.Path
 
 class ConvertToInstanceMethodSelectionResolver(
@@ -166,8 +167,7 @@ class ConvertToInstanceMethodSelectionResolver(
                         "The containing class must not be an inner class.",
                     )
                 }
-                // PsiImplicitClass is synthetic; check class name via instanceof by string?
-                if (containing.javaClass.simpleName == "PsiImplicitClass" || containing.name == null) {
+                if (containing is PsiImplicitClass || containing.name == null) {
                     return failure(
                         McpRefactoringErrorCode.UNSUPPORTED_TARGET,
                         "The containing class must not be an implicit class.",
@@ -273,9 +273,10 @@ class ConvertToInstanceMethodSelectionResolver(
 
     private fun projectRelativePath(project: Project, absolutePath: String): String {
         val base = project.basePath ?: return absolutePath
-        return Path.of(base).toAbsolutePath().normalize()
-            .relativize(Path.of(absolutePath).toAbsolutePath().normalize())
-            .toString()
+        val normalizedBase = Path.of(base).toAbsolutePath().normalize()
+        val normalizedAbsolute = Path.of(absolutePath).toAbsolutePath().normalize()
+        if (!normalizedAbsolute.startsWith(normalizedBase)) return absolutePath
+        return normalizedBase.relativize(normalizedAbsolute).toString()
     }
 
     private fun failure(
