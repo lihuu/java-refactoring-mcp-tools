@@ -70,6 +70,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_convert_to_instance_method missing", "java_convert_to_instance_method" in names)
         assertTrue("java_encapsulate_fields missing", "java_encapsulate_fields" in names)
         assertTrue("java_extract_interface missing", "java_extract_interface" in names)
+        assertTrue("java_extract_superclass missing", "java_extract_superclass" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -450,6 +451,24 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(descriptor.description.contains("Java"))
         assertEquals(
             setOf("pathInProject","sourceClassStartLine","sourceClassStartColumn","sourceClassEndLine","sourceClassEndColumn","memberStartLines","memberStartColumns","memberEndLines","memberEndColumns","interfaceName","targetPackage","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertFalse("targetPackage must remain optional", "targetPackage" in descriptor.inputSchema.requiredProperties)
+        val props = descriptor.inputSchema.propertiesSchema
+        listOf("memberStartLines","memberStartColumns","memberEndLines","memberEndColumns").forEach { name ->
+            val schema = props.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
+    }
+
+    fun testExtractSuperclassSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_extract_superclass" }
+        assertTrue(descriptor.description.contains("Extract Superclass"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertTrue(descriptor.description.contains("Java"))
+        assertEquals(
+            setOf("pathInProject","sourceClassStartLine","sourceClassStartColumn","sourceClassEndLine","sourceClassEndColumn","memberStartLines","memberStartColumns","memberEndLines","memberEndColumns","superclassName","targetPackage","projectPath"),
             descriptor.inputSchema.propertiesSchema.keys,
         )
         assertFalse("targetPackage must remain optional", "targetPackage" in descriptor.inputSchema.requiredProperties)
