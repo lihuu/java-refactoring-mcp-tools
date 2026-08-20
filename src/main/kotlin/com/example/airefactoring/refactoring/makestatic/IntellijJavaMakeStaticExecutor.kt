@@ -2,10 +2,8 @@ package com.example.airefactoring.refactoring.makestatic
 
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
 import com.intellij.psi.PsiMethod
@@ -18,6 +16,8 @@ import com.intellij.refactoring.makeStatic.Settings
 import com.intellij.refactoring.util.VariableData
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.containers.MultiMap
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -37,7 +37,10 @@ import java.nio.file.Path
  * BEFORE the single `run()` call, so the result carries only native facts. The single native command
  * is the only write command and therefore the only Undo entry.
  */
-class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
+class IntellijJavaMakeStaticExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : JavaMakeStaticExecutor {
 
     override suspend fun makeStatic(
         project: Project,
@@ -85,9 +88,7 @@ class IntellijJavaMakeStaticExecutor : JavaMakeStaticExecutor {
                     e.getMessages().distinct().joinToString(separator = "; "),
                 )
             }
-            PsiDocumentManager.getInstance(project).commitAllDocuments()
-            usageFacts.filesToPersist.mapNotNull(FileDocumentManager.getInstance()::getDocument)
-                .forEach(FileDocumentManager.getInstance()::saveDocument)
+            documentPersistence.persist(project, usageFacts.filesToPersist)
 
             JavaMakeStaticExecutionResult(
                 memberName = preparation.memberName,

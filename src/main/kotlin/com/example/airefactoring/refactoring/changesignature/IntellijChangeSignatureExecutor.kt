@@ -1,10 +1,12 @@
 package com.example.airefactoring.refactoring.changesignature
 
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
@@ -23,7 +25,10 @@ import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
 /** Executes one fully prepared Java Change Signature request through IntelliJ's native processor. */
-class IntellijChangeSignatureExecutor : ChangeSignatureExecutor {
+class IntellijChangeSignatureExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : ChangeSignatureExecutor {
 
     override suspend fun addParameter(
         project: Project,
@@ -66,8 +71,7 @@ class IntellijChangeSignatureExecutor : ChangeSignatureExecutor {
         )
         processor.setPreviewUsages(false)
         processor.run()
-        PsiDocumentManager.getInstance(project).commitAllDocuments()
-        saveAffectedDocuments(project, preparation.affectedFiles)
+        documentPersistence.persist(project, affectedVirtualFiles(project, preparation.affectedFiles))
 
         ChangeSignatureExecutionResult(
             methodName = preparation.methodName,
@@ -84,14 +88,11 @@ class IntellijChangeSignatureExecutor : ChangeSignatureExecutor {
         )
     }
 
-    private fun saveAffectedDocuments(project: Project, affectedFiles: List<String>) {
-        val basePath = project.basePath ?: return
-        val fileDocumentManager = FileDocumentManager.getInstance()
-        affectedFiles.forEach { relativePath ->
+    private fun affectedVirtualFiles(project: Project, affectedFiles: List<String>): Set<VirtualFile> {
+        val basePath = project.basePath ?: return emptySet()
+        return affectedFiles.mapNotNullTo(linkedSetOf()) { relativePath ->
             val absolutePath = Path.of(basePath).resolve(relativePath).normalize().toString()
-            val virtualFile = LocalFileSystem.getInstance().findFileByPath(absolutePath)
-                ?: return@forEach
-            fileDocumentManager.getDocument(virtualFile)?.let(fileDocumentManager::saveDocument)
+            LocalFileSystem.getInstance().findFileByPath(absolutePath)
         }
     }
 

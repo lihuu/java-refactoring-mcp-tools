@@ -5,6 +5,7 @@ import com.intellij.openapi.command.UndoConfirmationPolicy
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiExpression
@@ -17,6 +18,8 @@ import it.unimi.dsi.fastutil.ints.IntArrayList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 
 /**
  * Executes one fully prepared Introduce Parameter request through IntelliJ's native
@@ -31,6 +34,8 @@ import java.nio.file.Path
  */
 class IntellijIntroduceParameterExecutor internal constructor(
     private val resultInspector: IntroduceParameterResultInspector = DefaultIntroduceParameterResultInspector,
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
 ) : IntroduceParameterExecutor {
 
     override suspend fun introduceParameter(
@@ -56,8 +61,6 @@ class IntellijIntroduceParameterExecutor internal constructor(
 
             try {
                 processor.run()
-                PsiDocumentManager.getInstance(project).commitAllDocuments()
-
                 val result = resultInspector.inspect(
                     selection,
                     parameterName,
@@ -67,7 +70,10 @@ class IntellijIntroduceParameterExecutor internal constructor(
                     selection.updatedCallSiteCount,
                     documents.first { it.path == selection.sourceDocumentPath }.document,
                 )
-                saveAffectedDocuments(project, selection.affectedFiles, documents)
+                documentPersistence.persist(
+                    project,
+                    affectedVirtualFiles(project, selection.affectedFiles, documents),
+                )
                 result
             } catch (e: Exception) {
                 rollbackNativeMutation(project, documents, e)
@@ -187,30 +193,26 @@ class IntellijIntroduceParameterExecutor internal constructor(
         )
     }
 
-    private fun saveAffectedDocuments(
+    private fun affectedVirtualFiles(
         project: Project,
         affectedFiles: List<String>,
         documents: List<AffectedDocument>,
-    ) {
+    ): Set<VirtualFile> {
         val byPath = documents.associateBy { it.path }
         val fileDocumentManager = FileDocumentManager.getInstance()
-        affectedFiles.forEach { path ->
-            byPath[path]?.let { affected ->
-                fileDocumentManager.saveDocument(affected.document)
-            } ?: syncDocumentFromPath(project, fileDocumentManager, path)
+        return affectedFiles.mapNotNullTo(linkedSetOf()) { path ->
+            byPath[path]?.let { fileDocumentManager.getFile(it.document) }
+                ?: virtualFileFromPath(project, path)
         }
     }
 
-    private fun syncDocumentFromPath(
+    private fun virtualFileFromPath(
         project: Project,
-        fileDocumentManager: FileDocumentManager,
         path: String,
-    ) {
-        val basePath = project.basePath ?: return
-        val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+    ): VirtualFile? {
+        val basePath = project.basePath ?: return null
+        return com.intellij.openapi.vfs.LocalFileSystem.getInstance()
             .findFileByPath(Path.of(basePath).resolve(path).normalize().toString())
-            ?: return
-        fileDocumentManager.getDocument(virtualFile)?.let(fileDocumentManager::saveDocument)
     }
 
     private fun rollbackNativeMutation(

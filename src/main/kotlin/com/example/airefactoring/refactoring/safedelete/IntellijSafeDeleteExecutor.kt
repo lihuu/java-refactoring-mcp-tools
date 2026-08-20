@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.safedelete
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.refactoring.RefactoringBundle
@@ -13,6 +14,8 @@ import com.intellij.refactoring.util.RefactoringUIUtil
 import com.intellij.usageView.UsageInfo
 import com.intellij.usageView.UsageViewUtil
 import com.intellij.util.containers.MultiMap
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -29,7 +32,10 @@ import java.nio.file.Path
  * when the conflict map is empty does it call `run()`, which then performs the single native write
  * command (one global Undo) without ever showing a dialog.
  */
-class IntellijSafeDeleteExecutor : SafeDeleteExecutor {
+class IntellijSafeDeleteExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : SafeDeleteExecutor {
 
     override suspend fun delete(
         project: Project,
@@ -59,7 +65,7 @@ class IntellijSafeDeleteExecutor : SafeDeleteExecutor {
 
         processor.setPreviewUsages(false)
         processor.run()
-        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        documentPersistence.persist(project, affectedVirtualFiles(element, usages))
 
         SafeDeleteExecutionResult(
             targetDescription = preparation.targetDescription,
@@ -95,6 +101,14 @@ class IntellijSafeDeleteExecutor : SafeDeleteExecutor {
             )
         }
         return element
+    }
+
+    private fun affectedVirtualFiles(
+        element: PsiElement,
+        usages: Array<UsageInfo>,
+    ): Set<VirtualFile> = buildSet {
+        element.containingFile.virtualFile?.let(::add)
+        usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
     }
 
     /** Invokes the processor's protected `findUsages()` through reflection. */

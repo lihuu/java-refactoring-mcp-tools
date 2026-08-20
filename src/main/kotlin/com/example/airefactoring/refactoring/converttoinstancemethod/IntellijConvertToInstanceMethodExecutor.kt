@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.converttoinstancemethod
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiDocumentManager
@@ -11,6 +12,8 @@ import com.intellij.psi.PsiParameter
 import com.intellij.refactoring.BaseRefactoringProcessor
 import com.intellij.refactoring.convertToInstanceMethod.ConvertToInstanceMethodProcessor
 import com.intellij.usageView.UsageInfo
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -28,7 +31,10 @@ import java.nio.file.Path
  *   and restored in `finally` (no global leak), with `TestDialog` assertions in
  *   tests ensuring no dialog appears.
  */
-class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor {
+class IntellijConvertToInstanceMethodExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : ConvertToInstanceMethodExecutor {
 
     override suspend fun convert(
         project: Project,
@@ -41,6 +47,7 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
                 NativeUsageFacts(
                     nativeUsageCount = usages.size,
                     affectedFiles = projectRelativeAffectedFiles(project, usages, preparation),
+                    filesToPersist = affectedVirtualFiles(prepared, usages),
                 )
             }
         }
@@ -63,7 +70,7 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
                     e.getMessages().distinct().joinToString(separator = "; "),
                 )
             }
-            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            documentPersistence.persist(project, usageFacts.filesToPersist)
             executionResult(preparation, usageFacts)
         }
     }
@@ -222,6 +229,15 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
         return base.relativize(absolute).toString()
     }
 
+    private fun affectedVirtualFiles(
+        prepared: PreparedNativeExecution,
+        usages: Array<UsageInfo>,
+    ): Set<VirtualFile> = buildSet {
+        prepared.method.containingFile.virtualFile?.let(::add)
+        prepared.targetClass.containingFile?.virtualFile?.let(::add)
+        usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
+    }
+
     internal data class PreparedNativeExecution(
         val method: PsiMethod,
         val targetParameter: PsiParameter?,
@@ -232,6 +248,7 @@ class IntellijConvertToInstanceMethodExecutor : ConvertToInstanceMethodExecutor 
     internal data class NativeUsageFacts(
         val nativeUsageCount: Int,
         val affectedFiles: List<String>?,
+        val filesToPersist: Set<VirtualFile>,
     )
 
     private fun findUsagesNative(processor: ConvertToInstanceMethodProcessor): Array<UsageInfo> {

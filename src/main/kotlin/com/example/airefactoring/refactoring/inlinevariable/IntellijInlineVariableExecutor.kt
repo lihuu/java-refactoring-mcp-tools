@@ -12,12 +12,16 @@ import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiDocumentManager
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.refactoring.inline.InlineLocalHandler
 import com.intellij.refactoring.util.InlineUtil
 
 /** Executes IntelliJ's native Java Inline Variable refactoring with every UI choice fixed. */
-class IntellijInlineVariableExecutor : InlineVariableExecutor {
+class IntellijInlineVariableExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : InlineVariableExecutor {
 
     override suspend fun inline(
         project: Project,
@@ -118,8 +122,7 @@ class IntellijInlineVariableExecutor : InlineVariableExecutor {
                     result?.message ?: "Native Inline Variable did not execute.",
                 )
             }
-            PsiDocumentManager.getInstance(project).commitDocument(selection.document)
-            FileDocumentManager.getInstance().saveDocument(selection.document)
+            documentPersistence.persist(project, setOf(selection.file.virtualFile))
             InlineVariableExecutionResult(
                 variableName = preparation.variableName,
                 inlinedOccurrenceCount = preparation.occurrenceCount,

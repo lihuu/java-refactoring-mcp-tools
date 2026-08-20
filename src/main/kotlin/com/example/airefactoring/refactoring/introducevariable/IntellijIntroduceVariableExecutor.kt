@@ -6,7 +6,8 @@ import com.intellij.openapi.application.constrainedReadAndWriteAction
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiDocumentManager
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiExpression
 import com.intellij.psi.PsiType
@@ -17,7 +18,10 @@ import com.intellij.refactoring.introduceVariable.IntroduceVariableSettings
 import com.intellij.refactoring.introduceVariable.VariableExtractor
 
 /** Executes IntelliJ's native Java Introduce Variable refactoring with every UI choice fixed. */
-class IntellijIntroduceVariableExecutor : IntroduceVariableExecutor {
+class IntellijIntroduceVariableExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : IntroduceVariableExecutor {
 
     override suspend fun introduce(
         project: Project,
@@ -98,8 +102,11 @@ class IntellijIntroduceVariableExecutor : IntroduceVariableExecutor {
                 "MCP Introduce Variable",
                 null,
             )
-            PsiDocumentManager.getInstance(project).commitDocument(selection.document)
-            FileDocumentManager.getInstance().saveDocument(selection.document)
+            val virtualFile = FileDocumentManager.getInstance().getFile(selection.document)
+                ?: throw IntroduceVariablePreparationException(
+                    "The selected document no longer belongs to a file.",
+                )
+            documentPersistence.persist(project, setOf(virtualFile))
 
             val introducedName = introduced?.name
                 ?: throw IllegalStateException("Native Introduce Variable returned an unnamed variable.")

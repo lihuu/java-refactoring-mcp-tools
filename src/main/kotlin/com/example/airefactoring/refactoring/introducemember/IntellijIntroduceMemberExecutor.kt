@@ -22,6 +22,8 @@ import com.intellij.refactoring.introduceField.BaseExpressionToFieldHandler
 import com.intellij.refactoring.introduceField.IntroduceConstantHandler
 import com.intellij.refactoring.introduceField.IntroduceFieldHandler
 import com.intellij.refactoring.util.CommonRefactoringUtil
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 
 /**
  * Executes IntelliJ's native Introduce Constant / Introduce Field refactorings with every UI
@@ -30,6 +32,8 @@ import com.intellij.refactoring.util.CommonRefactoringUtil
  */
 class IntellijIntroduceMemberExecutor internal constructor(
     private val resultInspector: IntroduceMemberResultInspector = DefaultIntroduceMemberResultInspector,
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
 ) : IntroduceMemberExecutor {
 
     override suspend fun introduce(
@@ -107,7 +111,7 @@ class IntellijIntroduceMemberExecutor internal constructor(
                         actualName,
                         profile,
                     )
-                    FileDocumentManager.getInstance().saveDocument(selection.document)
+                    documentPersistence.persist(project, setOf(selection.file.virtualFile))
                     result
                 } catch (e: Exception) {
                     rollbackNativeMutation(

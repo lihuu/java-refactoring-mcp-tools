@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.moveinstancemethod
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiDocumentManager
@@ -15,6 +16,8 @@ import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodHandle
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodProcessor
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.containers.MultiMap
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
+import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -33,7 +36,10 @@ import java.nio.file.Path
  * `findUsages()` BEFORE the single `run()` call, so the result carries only native facts. The single
  * native command is the only write command and therefore the only Undo entry.
  */
-class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
+class IntellijMoveInstanceMethodExecutor internal constructor(
+    private val documentPersistence: NativeRefactoringDocumentPersister =
+        NativeRefactoringDocumentPersistence(),
+) : MoveInstanceMethodExecutor {
 
     override suspend fun move(
         project: Project,
@@ -43,6 +49,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
             val method = requireCurrentMethod(project, preparation)
             val target = requireCurrentTarget(project, preparation)
             PreparedNativeExecution(
+                method,
                 target,
                 HeadlessMoveInstanceMethodProcessor(project, method, target, nativeVisibility(preparation.newVisibility),
                     MoveInstanceMethodHandler.suggestParameterNames(method, target)),
@@ -54,6 +61,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
                 NativeUsageFacts(
                     usages.count { it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression },
                     projectRelativeAffectedFiles(project, usages, prepared.target, preparation),
+                    affectedVirtualFiles(prepared.method, prepared.target, usages),
                 )
             }
         }
@@ -62,7 +70,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
             requireCurrentTarget(project, preparation)
             prepared.processor.setPreviewUsages(false)
             prepared.processor.run()
-            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            documentPersistence.persist(project, usageFacts.filesToPersist)
             MoveInstanceMethodExecutionResult(
                 preparation.methodName, preparation.targetDescription, preparation.targetClassQualifiedName,
                 preparation.newVisibility, usageFacts.updatedCallSiteCount, usageFacts.affectedFiles,
@@ -152,6 +160,16 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
         return files.sorted()
     }
 
+    private fun affectedVirtualFiles(
+        method: PsiMethod,
+        target: PsiVariable,
+        usages: Array<UsageInfo>,
+    ): Set<VirtualFile> = buildSet {
+        method.containingFile.virtualFile?.let(::add)
+        ((target.type as? PsiClassType)?.resolve()?.containingFile?.virtualFile)?.let(::add)
+        usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
+    }
+
     /** Maps one absolute file path to a project-relative path, or null when it is not inside the project. */
     private fun relativeProjectPath(base: Path, absolutePath: String): String? {
         val absolute = Path.of(absolutePath).toAbsolutePath().normalize()
@@ -160,6 +178,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
     }
 
     private data class PreparedNativeExecution(
+        val method: PsiMethod,
         val target: PsiVariable,
         val processor: HeadlessMoveInstanceMethodProcessor,
     )
@@ -167,6 +186,7 @@ class IntellijMoveInstanceMethodExecutor : MoveInstanceMethodExecutor {
     private data class NativeUsageFacts(
         val updatedCallSiteCount: Int,
         val affectedFiles: List<String>?,
+        val filesToPersist: Set<VirtualFile>,
     )
 
     /**
