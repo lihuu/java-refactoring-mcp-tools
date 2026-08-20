@@ -56,7 +56,7 @@ class IntellijPullMembersUpExecutor internal constructor(
                 }
             }
             processor.setPreviewUsages(false)
-            WriteCommandAction.runWriteCommandAction(project) { processor.run() }
+            processor.run()
             val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceSub.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
             val targetFile = ReadAction.compute<VirtualFile?, RuntimeException> { targetSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Target file not found")
             val filesToPersist = setOf(sourceFile, targetFile)

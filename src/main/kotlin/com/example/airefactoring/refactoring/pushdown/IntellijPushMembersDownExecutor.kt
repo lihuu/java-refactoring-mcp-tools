@@ -61,7 +61,7 @@ class IntellijPushMembersDownExecutor internal constructor(
                 }
             }
             processor.setPreviewUsages(false)
-            WriteCommandAction.runWriteCommandAction(project) { processor.run() }
+            processor.run()
             val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
             val targetFiles = targetSubs.mapNotNull { ReadAction.compute<VirtualFile?, RuntimeException> { it.containingFile?.virtualFile } }
             val filesToPersist = (listOf(sourceFile) + targetFiles).toSet()
