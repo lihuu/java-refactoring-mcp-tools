@@ -591,6 +591,57 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testEncapsulateFieldsSuccessContainsEncapsulateFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.encapsulateFieldsSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Order.java",
+                fieldNames = listOf("amount", "status"),
+                getterNames = listOf("getAmount", "getStatus"),
+                setterNames = listOf("setAmount", "setStatus"),
+                fieldsVisibility = "private",
+                accessorsVisibility = "public",
+                encapsulateGet = true,
+                encapsulateSet = true,
+                useAccessorsWhenAccessible = true,
+                nativeUsageCount = 3,
+                affectedFiles = listOf("example/Order.java"),
+                summary = "Encapsulated 2 field(s).",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_encapsulate_fields", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals(listOf("amount", "status"), obj.getValue("fieldNames").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("private", obj.getValue("fieldsVisibility").jsonPrimitive.content)
+        assertEquals("public", obj.getValue("accessorsVisibility").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testExtractInterfaceSuccessContainsExtractInterfaceFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.extractInterfaceSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Service.java",
+                sourceClass = "example.Service",
+                interfaceName = "ServiceApi",
+                qualifiedInterfaceName = "example.api.ServiceApi",
+                memberNames = listOf("doIt", "COUNT"),
+                targetPackage = "example.api",
+                nativeUsageCount = 1,
+                affectedFiles = listOf("example/Service.java", "example/api/ServiceApi.java"),
+                summary = "Extracted interface example.api.ServiceApi from example.Service with 2 member(s).",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_extract_interface", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("example.Service", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("ServiceApi", obj.getValue("interfaceName").jsonPrimitive.content)
+        assertEquals("example.api.ServiceApi", obj.getValue("qualifiedInterfaceName").jsonPrimitive.content)
+        assertEquals(listOf("doIt", "COUNT"), obj.getValue("memberNames").jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("example.api", obj.getValue("targetPackage").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))

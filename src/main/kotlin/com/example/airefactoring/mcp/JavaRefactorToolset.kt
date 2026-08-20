@@ -10,6 +10,7 @@ import com.example.airefactoring.refactoring.introduceparameter.IntroduceParamet
 import com.example.airefactoring.refactoring.introducevariable.IntroduceVariableOperation
 import com.example.airefactoring.refactoring.converttoinstancemethod.ConvertToInstanceMethodOperation
 import com.example.airefactoring.refactoring.encapsulatefields.EncapsulateFieldsOperation
+import com.example.airefactoring.refactoring.extractinterface.ExtractInterfaceOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -33,6 +34,7 @@ class JavaRefactorToolset(
     private val javaMakeStaticOperation: JavaMakeStaticOperation = JavaMakeStaticOperation(),
     private val convertToInstanceMethodOperation: ConvertToInstanceMethodOperation = ConvertToInstanceMethodOperation(),
     private val encapsulateFieldsOperation: EncapsulateFieldsOperation = EncapsulateFieldsOperation(),
+    private val extractInterfaceOperation: ExtractInterfaceOperation = ExtractInterfaceOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -322,6 +324,63 @@ class JavaRefactorToolset(
     }
 
     @McpTool
+    @McpDescription(JAVA_EXTRACT_INTERFACE_DESCRIPTION)
+    suspend fun java_extract_interface(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the source class declaration name")
+        sourceClassStartLine: Int,
+        @McpDescription("1-based inclusive start column of the source class declaration name")
+        sourceClassStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the source class declaration name")
+        sourceClassEndLine: Int,
+        @McpDescription("1-based exclusive end column of the source class declaration name")
+        sourceClassEndColumn: Int,
+        @McpDescription("Ordered 1-based start lines of the member declaration names to extract; this list and every other member list use the same index order")
+        memberStartLines: List<Int>,
+        @McpDescription("Ordered 1-based start columns of the member declaration names, aligned with memberStartLines")
+        memberStartColumns: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end lines of the member declaration names, aligned with memberStartLines")
+        memberEndLines: List<Int>,
+        @McpDescription("Ordered 1-based exclusive end columns of the member declaration names, aligned with memberStartLines")
+        memberEndColumns: List<Int>,
+        @McpDescription("Simple Java name for the new interface")
+        interfaceName: String,
+        @McpDescription("Target package for the new interface; null or empty means same package as the source class")
+        targetPackage: String? = null,
+    ): String {
+        if (
+            memberStartLines.size != memberStartColumns.size ||
+            memberStartLines.size != memberEndLines.size ||
+            memberStartLines.size != memberEndColumns.size
+        ) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "Member range lists must have equal lengths.",
+            ).toJson()
+        }
+        if (memberStartLines.isEmpty()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.INVALID_RANGE,
+                "At least one member must be selected.",
+            ).toJson()
+        }
+        return extractInterfaceOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            sourceClassStartLine,
+            sourceClassStartColumn,
+            sourceClassEndLine,
+            sourceClassEndColumn,
+            memberStartLines,
+            memberStartColumns,
+            memberEndLines,
+            memberEndColumns,
+            interfaceName,
+            targetPackage,
+        )
+    }
+
+    @McpTool
     @McpDescription(CONVERT_TO_INSTANCE_METHOD_DESCRIPTION)
     suspend fun java_convert_to_instance_method(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -552,5 +611,10 @@ class JavaRefactorToolset(
                 "conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct " +
                 "PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error " +
                 "code on failure with one native Undo."
+
+        const val JAVA_EXTRACT_INTERFACE_DESCRIPTION =
+            "Extract Interface creates a new Java interface from 1..N public members of one exact Java class using IntelliJ's native " +
+                "Extract Interface refactoring, driven headlessly with no dialog. Use it after reading the source class and its members, choosing the members and interface identity explicitly, and waiting for " +
+                "user approval. The agent explicitly selects the source class declaration-name range (start inclusive, end exclusive), ordered member declaration-name ranges (start inclusive, end exclusive) of public instance methods and public static final fields belonging to that class, a simple interfaceName, and an optional targetPackage (null or empty means same package as source; otherwise a dot-separated qualified name). The plugin neither fills in nor changes those decisions; the source class always implements the new interface, Javadoc is fixed at 0, and only public members are extractable in V1. This is Java-only, native, creates the new interface file and wires implements, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
     }
 }

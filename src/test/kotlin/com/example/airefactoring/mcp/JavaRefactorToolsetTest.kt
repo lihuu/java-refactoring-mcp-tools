@@ -68,6 +68,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_move_instance_method missing", "java_move_instance_method" in names)
         assertTrue("java_make_static missing", "java_make_static" in names)
         assertTrue("java_convert_to_instance_method missing", "java_convert_to_instance_method" in names)
+        assertTrue("java_encapsulate_fields missing", "java_encapsulate_fields" in names)
+        assertTrue("java_extract_interface missing", "java_extract_interface" in names)
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -421,6 +423,42 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             setOf("pathInProject","methodStartLine","methodStartColumn","methodEndLine","methodEndColumn","targetKind","targetStartLine","targetStartColumn","targetEndLine","targetEndColumn","newVisibility","confirmInterfaceImplementations","projectPath"),
             descriptor.inputSchema.propertiesSchema.keys,
         )
+    }
+
+    fun testEncapsulateFieldsSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_encapsulate_fields" }
+        assertTrue(descriptor.description.contains("Encapsulate Fields"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertEquals(
+            setOf("pathInProject","fieldStartLines","fieldStartColumns","fieldEndLines","fieldEndColumns","getterNames","setterNames","fieldsVisibility","accessorsVisibility","encapsulateGet","encapsulateSet","useAccessorsWhenAccessible","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        // primitive array check
+        val props = descriptor.inputSchema.propertiesSchema
+        listOf("fieldStartLines","fieldStartColumns","fieldEndLines","fieldEndColumns").forEach { name ->
+            val schema = props.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
+        assertEquals("array", props.getValue("getterNames").jsonObject.getValue("type").jsonPrimitive.content)
+    }
+
+    fun testExtractInterfaceSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_extract_interface" }
+        assertTrue(descriptor.description.contains("Extract Interface"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertTrue(descriptor.description.contains("Java"))
+        assertEquals(
+            setOf("pathInProject","sourceClassStartLine","sourceClassStartColumn","sourceClassEndLine","sourceClassEndColumn","memberStartLines","memberStartColumns","memberEndLines","memberEndColumns","interfaceName","targetPackage","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertFalse("targetPackage must remain optional", "targetPackage" in descriptor.inputSchema.requiredProperties)
+        val props = descriptor.inputSchema.propertiesSchema
+        listOf("memberStartLines","memberStartColumns","memberEndLines","memberEndColumns").forEach { name ->
+            val schema = props.getValue(name).jsonObject
+            assertEquals("array", schema.getValue("type").jsonPrimitive.content)
+            assertEquals("integer", schema.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+        }
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {
