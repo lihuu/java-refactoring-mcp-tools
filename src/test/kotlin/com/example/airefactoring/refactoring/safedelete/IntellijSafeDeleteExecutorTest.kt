@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.safedelete
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
@@ -69,6 +70,23 @@ class IntellijSafeDeleteExecutorTest : LightJavaCodeInsightFixtureTestCase() {
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments()
         assertEquals(original, documentText("UnusedMethod.java"))
+    }
+
+    fun testSuccessfulSafeDeletePersistsOnlyTheTargetFile() {
+        mirrorRealFile(
+            "PersistenceUnusedMethod.java",
+            "class PersistenceUnusedMethod { void unusedMethod() {} }",
+        )
+        val preparation = resolve("PersistenceUnusedMethod.java", "unusedMethod")
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runWithThrowingDialog {
+            runExecutor {
+                IntellijSafeDeleteExecutor(persister).delete(project, preparation)
+            }
+        }
+
+        persister.assertPersistedExactly("PersistenceUnusedMethod.java")
     }
 
     fun testReferencedMethodThrowsConflictWithoutMutation() {

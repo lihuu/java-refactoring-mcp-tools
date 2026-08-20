@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.moveinstancemethod
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.editor.Document
@@ -91,6 +92,22 @@ class IntellijMoveInstanceMethodExecutorTest : LightJavaCodeInsightFixtureTestCa
         assertEquals(
             listOf("example/Checkout.java", "example/Customer.java", "example/Invoice.java"),
             result.affectedFiles,
+        )
+    }
+
+    fun testSuccessfulMoveInstanceMethodPersistsSourceDestinationAndCaller() {
+        val (invoiceFile, _, _) = crossFileTargetFixture()
+        val preparation = prepareMove(invoiceFile, "applyDiscount", "customer", "public")
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijMoveInstanceMethodExecutor(persister).move(project, preparation)
+        }
+
+        persister.assertPersistedExactly(
+            "example/Invoice.java",
+            "example/Customer.java",
+            "example/Checkout.java",
         )
     }
 

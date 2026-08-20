@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.makestatic
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
@@ -171,6 +172,53 @@ class IntellijJavaMakeStaticExecutorTest : LightJavaCodeInsightFixtureTestCase()
         val persistedCaller = Files.readString(Path.of(project.basePath!!, "example/Checkout.java"))
         assertTrue("native target edits must be persisted", persistedInvoice.contains("static int applyDiscount"))
         assertTrue("native usage edits must be persisted", persistedCaller.contains("Invoice.applyDiscount(invoice)"))
+    }
+
+    fun testSuccessfulMakeStaticPersistsTargetAndCaller() {
+        mirrorFixture(
+            "example/PersistInvoice.java",
+            """
+                package example;
+
+                public class PersistInvoice {
+                    private int amount;
+
+                    public PersistInvoice(int amount) { this.amount = amount; }
+
+                    public int applyDiscount() { return amount; }
+                }
+            """.trimIndent(),
+        )
+        mirrorFixture(
+            "example/PersistCheckout.java",
+            """
+                package example;
+
+                public class PersistCheckout {
+                    public int charge() {
+                        PersistInvoice invoice = new PersistInvoice(100);
+                        return invoice.applyDiscount();
+                    }
+                }
+            """.trimIndent(),
+        )
+        val preparation = resolvePreparation(
+            "example/PersistInvoice.java",
+            "applyDiscount",
+            classParameterName = "invoice",
+            fieldParameters = emptyList(),
+            replaceUsages = true,
+        )
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijJavaMakeStaticExecutor(persister).makeStatic(project, preparation)
+        }
+
+        persister.assertPersistedExactly(
+            "example/PersistInvoice.java",
+            "example/PersistCheckout.java",
+        )
     }
 
     fun testMakesInnerClassStatic() {

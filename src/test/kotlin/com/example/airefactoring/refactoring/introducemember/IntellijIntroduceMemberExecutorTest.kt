@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.introducemember
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.editor.Document
@@ -63,6 +64,22 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
         )
     }
 
+    fun testSuccessfulIntroduceConstantPersistsOnlyTheSelectedFile() {
+        val selection = resolveFirstExpression(
+            "ConstantPersistence.java",
+            "class ConstantPersistence { int value() { return 12; } }",
+            "12",
+        )
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijIntroduceMemberExecutor(documentPersistence = persister)
+                .introduce(project, selection, "BASE", IntroduceMemberProfile.Constant)
+        }
+
+        persister.assertPersistedExactly("ConstantPersistence.java")
+    }
+
     fun testInstanceFinalFieldProfileCreatesPrivateFinalNonStaticFieldInDeclaration() {
         val selection = resolveFirstExpression(
             "FieldMember.java",
@@ -92,6 +109,22 @@ class IntellijIntroduceMemberExecutorTest : LightJavaCodeInsightFixtureTestCase(
             2,
             calls,
         )
+    }
+
+    fun testSuccessfulIntroduceFieldPersistsOnlyTheSelectedFile() {
+        val selection = resolveFirstExpression(
+            "FieldPersistence.java",
+            "class FieldPersistence { int value() { return compute(); } int compute() { return 2; } }",
+            "compute()",
+        )
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijIntroduceMemberExecutor(documentPersistence = persister)
+                .introduce(project, selection, "result", IntroduceMemberProfile.InstanceFinalField)
+        }
+
+        persister.assertPersistedExactly("FieldPersistence.java")
     }
 
     fun testReportsReferenceFieldType() {

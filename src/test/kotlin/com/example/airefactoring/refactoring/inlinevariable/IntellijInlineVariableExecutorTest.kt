@@ -1,5 +1,6 @@
 package com.example.airefactoring.refactoring.inlinevariable
 
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.editor.Document
@@ -42,6 +43,19 @@ class IntellijInlineVariableExecutorTest : LightJavaCodeInsightFixtureTestCase()
         assertFalse(selection.file.text.contains("int sum"))
         assertTrue(selection.file.text, selection.file.text.contains("(1 + 2) * 3"))
         assertTrue(selection.file.text, selection.file.text.contains("+ 1 + 2;"))
+    }
+
+    fun testSuccessfulInlineVariablePersistsOnlyTheSelectedFile() {
+        val selection = resolve(
+            "InlinePersistence.java",
+            "class InlinePersistence { int value() { int sum = 1 + 2; return sum; } }",
+            "sum =",
+        )
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor { IntellijInlineVariableExecutor(persister).inline(project, selection) }
+
+        persister.assertPersistedExactly("InlinePersistence.java")
     }
 
     fun testChangedInitializerDependencyFailsWithoutMutation() {

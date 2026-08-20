@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.introduceparameter
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.command.WriteCommandAction
@@ -71,6 +72,25 @@ class IntellijIntroduceParameterExecutorTest : LightJavaCodeInsightFixtureTestCa
         assertTrue(
             "caller two must receive the caller-context argument",
             documentText(fixture.callerTwoPath).contains("priceFor(5, 5 * 2)"),
+        )
+    }
+
+    fun testSuccessfulIntroduceParameterPersistsDeclarationAndAllCallers() {
+        val fixture = priceServiceFixture()
+        val selection = resolveExpression(fixture, "rate * 2", "doubledRate")
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runWithThrowingDialog {
+            runExecutor {
+                IntellijIntroduceParameterExecutor(documentPersistence = persister)
+                    .introduceParameter(project, selection, "doubledRate")
+            }
+        }
+
+        persister.assertPersistedExactly(
+            "ParamService.java",
+            "ParamCallerOne.java",
+            "ParamCallerTwo.java",
         )
     }
 

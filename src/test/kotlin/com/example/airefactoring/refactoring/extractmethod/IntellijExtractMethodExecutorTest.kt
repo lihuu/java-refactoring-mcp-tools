@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.extractmethod
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -73,6 +74,19 @@ class IntellijExtractMethodExecutorTest : LightJavaCodeInsightFixtureTestCase() 
         val text = selection.document.text
         assertTrue("call site missing in:\n$text", text.contains("printValue(value);"))
         assertTrue("helper method missing in:\n$text", text.contains("private void printValue(int value)"))
+    }
+
+    fun testSuccessfulExtractionPersistsOnlyTheExtractedFile() {
+        myFixture.configureByText("CalcPersistence.java", calcMarked)
+        val range = sourceRangeFromEditor()
+        mirrorRealFile("CalcPersistence.java", myFixture.editor.document.text)
+        val selection = resolveSelection("CalcPersistence.java", range)
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        IntellijExtractMethodExecutor(persister)
+            .extract(project, selection.file, selection.elements, "printValue")
+
+        persister.assertPersistedExactly("CalcPersistence.java")
     }
 
     // --- Step 2a: preparation failure mapping ---

@@ -1,5 +1,6 @@
 package com.example.airefactoring.refactoring.changesignature
 
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.undo.UndoManager
@@ -65,6 +66,21 @@ class IntellijChangeSignatureExecutorTest : LightJavaCodeInsightFixtureTestCase(
             assertEquals(2, call.argumentList.expressionCount)
             assertEquals("\"!\"", call.argumentList.expressions[1].text)
         }
+    }
+
+    fun testSuccessfulChangeSignaturePersistsDeclarationAndAllCallers() {
+        val preparation = prepareGreetingFixture(parameterPosition = 2)
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijChangeSignatureExecutor(persister).addParameter(project, preparation)
+        }
+
+        persister.assertPersistedExactly(
+            "example/GreetingService.java",
+            "example/CallerOne.java",
+            "example/CallerTwo.java",
+        )
     }
 
     fun testAddsFirstParameterAtOneBasedPositionOne() {

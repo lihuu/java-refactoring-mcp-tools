@@ -42,6 +42,7 @@ class IntellijSafeDeleteExecutor internal constructor(
         preparation: SafeDeletePreparation,
     ): SafeDeleteExecutionResult = withContext(Dispatchers.EDT) {
         val element = requireCurrentElement(project, preparation)
+        val targetFile = element.containingFile.virtualFile
 
         val processor = SafeDeleteProcessor.createInstance(
             project,
@@ -65,7 +66,7 @@ class IntellijSafeDeleteExecutor internal constructor(
 
         processor.setPreviewUsages(false)
         processor.run()
-        documentPersistence.persist(project, affectedVirtualFiles(element, usages))
+        documentPersistence.persist(project, affectedVirtualFiles(targetFile, usages))
 
         SafeDeleteExecutionResult(
             targetDescription = preparation.targetDescription,
@@ -104,10 +105,10 @@ class IntellijSafeDeleteExecutor internal constructor(
     }
 
     private fun affectedVirtualFiles(
-        element: PsiElement,
+        targetFile: VirtualFile,
         usages: Array<UsageInfo>,
     ): Set<VirtualFile> = buildSet {
-        element.containingFile.virtualFile?.let(::add)
+        add(targetFile)
         usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
     }
 

@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.converttoinstancemethod
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -50,6 +51,20 @@ class IntellijConvertToInstanceMethodExecutorTest : LightJavaCodeInsightFixtureT
         assertTrue(result.affectedFiles!!.any { it.contains("Customer") } || custAfter.classes.single().findMethodsByName("format", false).isNotEmpty() || utilAfter.classes.single().findMethodsByName("format", false).isEmpty())
     }
 
+    fun testSuccessfulConvertToInstanceMethodPersistsSourceTargetAndCaller() {
+        val (utilFile, _, _) = fixture()
+        val preparation = prepare(utilFile, "format", "customer", "public", false)
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        val result = runExecutor {
+            execWithNoDialog {
+                IntellijConvertToInstanceMethodExecutor(persister).convert(project, preparation)
+            }
+        }
+
+        persister.assertPersistedExactly(*requireNotNull(result.affectedFiles).toTypedArray())
+    }
+
     fun testOneUndoRestoresFiles() {
         val (utilFile, customerFile, callerFile) = fixture()
         val utilText = utilFile.text; val custText = customerFile.text; val callerText = callerFile.text
@@ -72,9 +87,12 @@ class IntellijConvertToInstanceMethodExecutorTest : LightJavaCodeInsightFixtureT
             doc.replaceString(off, off + "format(Customer customer)".length, "format(Customer changed)")
         }
         PsiDocumentManager.getInstance(project).commitDocument(doc)
-        val afterEdit = utilFile.text
+        val afterEdit = (PsiManager.getInstance(project).findFile(utilFile.virtualFile) as PsiJavaFile).text
         try { runExecutor { execWithNoDialog { executor.convert(project, prep) } }; fail("expected stale") } catch (_: ConvertToInstanceMethodPreparationException) {}
-        assertEquals(afterEdit, utilFile.text)
+        assertEquals(
+            afterEdit,
+            (PsiManager.getInstance(project).findFile(utilFile.virtualFile) as PsiJavaFile).text,
+        )
     }
 
     fun testNoDialogOnConflict() {

@@ -1,6 +1,7 @@
 package com.example.airefactoring.refactoring.introducevariable
 
 import com.example.airefactoring.refactoring.SourceRange
+import com.example.airefactoring.refactoring.RecordingNativeRefactoringDocumentPersister
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.editor.Document
@@ -54,6 +55,21 @@ class IntellijIntroduceVariableExecutorTest : LightJavaCodeInsightFixtureTestCas
         val remaining = PsiTreeUtil.findChildrenOfType(selection.file, PsiBinaryExpression::class.java)
             .count { it.text == "10 + 20" }
         assertEquals("initializer plus untouched duplicate must remain", 2, remaining)
+    }
+
+    fun testSuccessfulIntroduceVariablePersistsOnlyTheSelectedFile() {
+        val selection = resolveFirstExpression(
+            "VariablePersistence.java",
+            "class VariablePersistence { int total() { return 10 + 20; } }",
+            "10 + 20",
+        )
+        val persister = RecordingNativeRefactoringDocumentPersister()
+
+        runExecutor {
+            IntellijIntroduceVariableExecutor(persister).introduce(project, selection, "sum")
+        }
+
+        persister.assertPersistedExactly("VariablePersistence.java")
     }
 
     fun testConflictingPreferredNameUsesIntellijUniqueName() {
