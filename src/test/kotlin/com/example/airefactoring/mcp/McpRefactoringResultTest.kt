@@ -668,6 +668,47 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("interfaceName"))
     }
 
+    fun testPullMembersUpSuccessContainsPullFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.pullMembersUpSuccess(
+                projectBasePath = "/project",
+                filePath = "a/Sub.java",
+                sourceClass = "a.Sub",
+                targetSuperclass = "a.Base",
+                memberNames = listOf("handle"),
+                nativeUsageCount = 1,
+                affectedFiles = listOf("a/Sub.java", "a/Base.java"),
+                summary = "Pulled 1 member(s) from a.Sub to a.Base.",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_pull_members_up", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("a.Sub", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("a.Base", obj.getValue("targetSuperclass").jsonPrimitive.content)
+        assertEquals(listOf("handle"), obj.getValue("memberNames").jsonArray.map { it.jsonPrimitive.content })
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testPushMembersDownSuccessContainsPushFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.pushMembersDownSuccess(
+                projectBasePath = "/project",
+                filePath = "a/SuperBase.java",
+                sourceClass = "a.SuperBase",
+                targetSubclasses = listOf("a.SubA", "a.SubB"),
+                memberNames = listOf("handle"),
+                nativeUsageCount = 0,
+                affectedFiles = listOf("a/SuperBase.java", "a/SubA.java", "a/SubB.java"),
+                summary = "Pushed 1 member(s) from a.SuperBase to 2 subclass(es).",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_push_members_down", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("a.SuperBase", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals(listOf("a.SubA", "a.SubB"), obj.getValue("targetSubclasses").jsonArray.map { it.jsonPrimitive.content })
+        assertFalse(obj.containsKey("code"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))
