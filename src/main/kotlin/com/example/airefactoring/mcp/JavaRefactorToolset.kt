@@ -12,6 +12,7 @@ import com.example.airefactoring.refactoring.converttoinstancemethod.ConvertToIn
 import com.example.airefactoring.refactoring.encapsulatefields.EncapsulateFieldsOperation
 import com.example.airefactoring.refactoring.extractinterface.ExtractInterfaceOperation
 import com.example.airefactoring.refactoring.extractsuperclass.ExtractSuperclassOperation
+import com.example.airefactoring.refactoring.locator.LocateSymbolOperation
 import com.example.airefactoring.refactoring.pullup.PullMembersUpOperation
 import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
 import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossibleOperation
@@ -43,7 +44,22 @@ class JavaRefactorToolset(
     private val pullMembersUpOperation: PullMembersUpOperation = PullMembersUpOperation(),
     private val pushMembersDownOperation: PushMembersDownOperation = PushMembersDownOperation(),
     private val useInterfaceWherePossibleOperation: UseInterfaceWherePossibleOperation = UseInterfaceWherePossibleOperation(),
+    private val locateSymbolOperation: LocateSymbolOperation = LocateSymbolOperation(),
 ) : McpToolset {
+
+    @McpTool
+    @McpDescription(LOCATE_SYMBOL_DESCRIPTION)
+    suspend fun java_locate_symbol(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("Exact Java identifier to locate") symbolName: String,
+        @McpDescription("Optional filter: 'class', 'method', 'field', 'parameter', or 'local'")
+        kindFilter: String? = null,
+    ): String = locateSymbolOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        symbolName,
+        kindFilter,
+    )
 
     @McpTool
     @McpDescription(EXTRACT_METHOD_DESCRIPTION)
@@ -649,6 +665,16 @@ class JavaRefactorToolset(
     }
 
     private companion object {
+        const val LOCATE_SYMBOL_DESCRIPTION =
+            "Read-only locator: returns the exact 1-based declaration-name ranges of every " +
+                "declaration of one Java identifier in one file, ordered by position, each with " +
+                "its kind ('class', 'method', 'field', 'parameter', or 'local') and containing-class " +
+                "qualified name. Call it immediately before any range-based refactoring tool to " +
+                "obtain fresh coordinates, and re-call it after every successful mutation because " +
+                "all later line and column positions shift. Never guess or hand-count columns. " +
+                "Returns JSON with ok=true and a candidates list on success, or ok=false with a " +
+                "stable error code on failure."
+
         const val EXTRACT_METHOD_DESCRIPTION =
             "Extracts a Java expression or statement block into a new method using IntelliJ's " +
                 "native Extract Method refactoring. Use it to split a complex or long Java method " +

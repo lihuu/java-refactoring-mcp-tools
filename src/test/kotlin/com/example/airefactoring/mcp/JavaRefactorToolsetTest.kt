@@ -74,7 +74,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_pull_members_up missing", "java_pull_members_up" in names)
         assertTrue("java_push_members_down missing", "java_push_members_down" in names)
         assertTrue("java_use_interface_where_possible missing", "java_use_interface_where_possible" in names)
-        assertEquals(17, names.count { it.startsWith("java_") })
+        assertEquals(18, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
