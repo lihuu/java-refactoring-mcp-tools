@@ -15,7 +15,6 @@ import com.intellij.refactoring.move.moveInstanceMethod.MethodCallUsageInfo
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodHandler
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodProcessor
 import com.intellij.usageView.UsageInfo
-import com.intellij.util.SlowOperations
 import com.intellij.util.containers.MultiMap
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
@@ -46,6 +45,15 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
         project: Project,
         preparation: MoveInstanceMethodPreparation,
     ): MoveInstanceMethodExecutionResult {
+        // suggestParameterNames walks stub indexes via JavaCodeStyleManager.suggestVariableName,
+        // which trips SlowOperations assertions on EDT. Off-EDT read actions are exempt by design.
+        val suggestedParameterNames = withContext(Dispatchers.Default) {
+            ReadAction.compute<Map<PsiClass, String>, RuntimeException> {
+                val method = requireCurrentMethod(project, preparation)
+                val target = requireCurrentTarget(project, preparation)
+                MoveInstanceMethodHandler.suggestParameterNames(method, target)
+            }
+        }
         val prepared = withContext(Dispatchers.EDT) {
             val method = requireCurrentMethod(project, preparation)
             val target = requireCurrentTarget(project, preparation)
@@ -54,9 +62,7 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
                 target,
                 HeadlessMoveInstanceMethodProcessor(
                     project, method, target, nativeVisibility(preparation.newVisibility),
-                    SlowOperations.allowSlowOperations<Map<PsiClass, String>, RuntimeException> {
-                        MoveInstanceMethodHandler.suggestParameterNames(method, target)
-                    },
+                    suggestedParameterNames,
                 ),
             )
         }
