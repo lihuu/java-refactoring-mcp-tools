@@ -709,6 +709,46 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testUseInterfaceWherePossibleSuccessContainsUseInterfaceFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.useInterfaceWherePossibleSuccess(
+                projectBasePath = "/project",
+                filePath = "a/Samples.java",
+                sourceClass = "a.Impl",
+                targetInterface = "a.Widenable",
+                nativeUsageCount = 4,
+                affectedFiles = listOf("a/Holder.java", "a/Samples.java"),
+                renamedVariables = listOf("impl -> widenable"),
+                summary = "Rewrote type usages of a.Impl to interface a.Widenable.",
+            ).toJson()
+        ).jsonObject
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_use_interface_where_possible", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("a.Impl", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("a.Widenable", obj.getValue("targetInterface").jsonPrimitive.content)
+        assertEquals(4, obj.getValue("nativeUsageCount").jsonPrimitive.int)
+        assertEquals(listOf("impl -> widenable"), obj.getValue("renamedVariables").jsonArray.map { it.jsonPrimitive.content })
+        assertFalse(obj.containsKey("code"))
+    }
+
+    fun testUseInterfaceWherePossibleSuccessOmitsEmptyOptionalFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.useInterfaceWherePossibleSuccess(
+                projectBasePath = "/project",
+                filePath = "a/Samples.java",
+                sourceClass = "a.Impl",
+                targetInterface = "a.Widenable",
+                nativeUsageCount = 4,
+                affectedFiles = null,
+                renamedVariables = null,
+                summary = "Rewrote type usages of a.Impl to interface a.Widenable.",
+            ).toJson()
+        ).jsonObject
+        assertFalse(obj.containsKey("affectedFiles"))
+        assertFalse(obj.containsKey("renamedVariables"))
+        assertFalse(obj.containsKey("code"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))

@@ -86,7 +86,9 @@ data class McpRefactoringResult private constructor(
     val qualifiedSuperclassName: String? = null,
     val targetSuperclass: String? = null,
     val targetSubclasses: List<String>? = null,
+    val targetInterface: String? = null,
     val memberNames: List<String>? = null,
+    val renamedVariables: List<String>? = null,
     val targetPackage: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
@@ -460,6 +462,28 @@ data class McpRefactoringResult private constructor(
             memberNames = memberNames,
             nativeUsageCount = nativeUsageCount,
             affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun useInterfaceWherePossibleSuccess(
+            projectBasePath: String,
+            filePath: String,
+            sourceClass: String,
+            targetInterface: String,
+            nativeUsageCount: Int,
+            affectedFiles: List<String>?,
+            renamedVariables: List<String>?,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_use_interface_where_possible",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            sourceClass = sourceClass,
+            targetInterface = targetInterface,
+            nativeUsageCount = nativeUsageCount,
+            affectedFiles = affectedFiles,
+            renamedVariables = renamedVariables,
             summary = summary,
         )
 
