@@ -2,7 +2,7 @@ package com.example.airefactoring.refactoring.locator
 
 import com.example.airefactoring.mcp.McpRefactoringErrorCode
 import com.example.airefactoring.mcp.McpRefactoringResult
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiClass
@@ -52,7 +52,7 @@ private data class LocatorSuccess(
  */
 class LocateSymbolOperation {
 
-    fun execute(
+    suspend fun execute(
         project: Project,
         pathInProject: String,
         symbolName: String,
@@ -70,21 +70,20 @@ class LocateSymbolOperation {
                 "Unsupported kindFilter '$kindFilter'; expected one of ${SUPPORTED_KINDS.joinToString(", ")}.",
             ).toJson()
         }
-        return ReadAction.compute<String, RuntimeException> {
+        return smartReadAction(project) {
             val virtualFile = LocalFileSystem.getInstance()
                 .findFileByNioFile(Path.of(project.basePath!!, pathInProject))
-                ?: return@compute McpRefactoringResult.failure(
+                ?: return@smartReadAction McpRefactoringResult.failure(
                     McpRefactoringErrorCode.FILE_NOT_FOUND,
                     "File not found: $pathInProject",
                 ).toJson()
             val psiFile = PsiManager.getInstance(project).findFile(virtualFile) as? PsiJavaFile
-                ?: return@compute McpRefactoringResult.failure(
+                ?: return@smartReadAction McpRefactoringResult.failure(
                     McpRefactoringErrorCode.NOT_JAVA_FILE,
                     "Not a Java file: $pathInProject",
                 ).toJson()
-            PsiDocumentManager.getInstance(project).commitAllDocuments()
             val document = PsiDocumentManager.getInstance(project).getDocument(psiFile)
-                ?: return@compute McpRefactoringResult.failure(
+                ?: return@smartReadAction McpRefactoringResult.failure(
                     McpRefactoringErrorCode.READ_ONLY,
                     "No document available for $pathInProject",
                 ).toJson()

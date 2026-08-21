@@ -11,6 +11,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import junit.framework.TestCase
@@ -57,7 +58,7 @@ class LocateSymbolOperationTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testFindsAllDeclarationsOrderedByOffsetWithExactRanges() {
         fixture()
-        val obj = Json.parseToJsonElement(operation.execute(project, "example/Widget.java", "weight", null)).jsonObject
+        val obj = Json.parseToJsonElement(runBlocking { operation.execute(project, "example/Widget.java", "weight", null) }).jsonObject
         TestCase.assertEquals(true, obj.getValue("ok").jsonPrimitive.boolean)
         TestCase.assertEquals("java_locate_symbol", obj.getValue("operation").jsonPrimitive.content)
         TestCase.assertEquals(2, obj.getValue("candidateCount").jsonPrimitive.int)
@@ -75,7 +76,7 @@ class LocateSymbolOperationTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testKindFilterNarrowsResults() {
         fixture()
-        val obj = Json.parseToJsonElement(operation.execute(project, "example/Widget.java", "weight", "field")).jsonObject
+        val obj = Json.parseToJsonElement(runBlocking { operation.execute(project, "example/Widget.java", "weight", "field") }).jsonObject
         TestCase.assertEquals(1, obj.getValue("candidateCount").jsonPrimitive.int)
         TestCase.assertEquals(
             "field",
@@ -85,13 +86,13 @@ class LocateSymbolOperationTest : LightJavaCodeInsightFixtureTestCase() {
 
     fun testUnknownSymbolReturnsEmptySuccess() {
         fixture()
-        val obj = Json.parseToJsonElement(operation.execute(project, "example/Widget.java", "nope", null)).jsonObject
+        val obj = Json.parseToJsonElement(runBlocking { operation.execute(project, "example/Widget.java", "nope", null) }).jsonObject
         TestCase.assertEquals(0, obj.getValue("candidateCount").jsonPrimitive.int)
         TestCase.assertEquals(0, obj.getValue("candidates").jsonArray.size)
     }
 
     fun testMissingFileReturnsFileNotFoundFailure() {
-        val json = operation.execute(project, "example/Missing.java", "x", null)
+        val json = runBlocking { operation.execute(project, "example/Missing.java", "x", null) }
         val obj = Json.parseToJsonElement(json).jsonObject
         TestCase.assertEquals("false", obj.getValue("ok").jsonPrimitive.content)
         TestCase.assertEquals("FILE_NOT_FOUND", obj.getValue("code").jsonPrimitive.content)
