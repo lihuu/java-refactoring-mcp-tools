@@ -73,6 +73,8 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_extract_superclass missing", "java_extract_superclass" in names)
         assertTrue("java_pull_members_up missing", "java_pull_members_up" in names)
         assertTrue("java_push_members_down missing", "java_push_members_down" in names)
+        assertTrue("java_use_interface_where_possible missing", "java_use_interface_where_possible" in names)
+        assertEquals(17, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -517,6 +519,21 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         val target = props.getValue("targetSubclassFqns").jsonObject
         assertEquals("array", target.getValue("type").jsonPrimitive.content)
         assertEquals("string", target.getValue("items").jsonObject.getValue("type").jsonPrimitive.content)
+    }
+
+    fun testUseInterfaceWherePossibleSchemaAndDescription() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }.single { it.name == "java_use_interface_where_possible" }
+        assertTrue(descriptor.description.contains("Use Interface Where Possible"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
+        assertTrue(descriptor.description.contains("Java"))
+        assertTrue(descriptor.description.contains("native"))
+        assertTrue(descriptor.description.contains("replaceInstanceOf is fixed off"))
+        assertEquals(
+            setOf("pathInProject","sourceClassStartLine","sourceClassStartColumn","sourceClassEndLine","sourceClassEndColumn","targetInterfaceFqn","projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        val target = descriptor.inputSchema.propertiesSchema.getValue("targetInterfaceFqn").jsonObject
+        assertEquals("string", target.getValue("type").jsonPrimitive.content)
     }
 
     fun testPluginXmlRegistersOnlyJavaRefactorToolset() {

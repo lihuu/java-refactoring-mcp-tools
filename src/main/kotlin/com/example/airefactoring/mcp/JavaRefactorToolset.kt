@@ -14,6 +14,7 @@ import com.example.airefactoring.refactoring.extractinterface.ExtractInterfaceOp
 import com.example.airefactoring.refactoring.extractsuperclass.ExtractSuperclassOperation
 import com.example.airefactoring.refactoring.pullup.PullMembersUpOperation
 import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
+import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossibleOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -41,6 +42,7 @@ class JavaRefactorToolset(
     private val extractSuperclassOperation: ExtractSuperclassOperation = ExtractSuperclassOperation(),
     private val pullMembersUpOperation: PullMembersUpOperation = PullMembersUpOperation(),
     private val pushMembersDownOperation: PushMembersDownOperation = PushMembersDownOperation(),
+    private val useInterfaceWherePossibleOperation: UseInterfaceWherePossibleOperation = UseInterfaceWherePossibleOperation(),
 ) : McpToolset {
 
     @McpTool
@@ -558,6 +560,38 @@ class JavaRefactorToolset(
     }
 
     @McpTool
+    @McpDescription(JAVA_USE_INTERFACE_WHERE_POSSIBLE_DESCRIPTION)
+    suspend fun java_use_interface_where_possible(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the source class declaration name")
+        sourceClassStartLine: Int,
+        @McpDescription("1-based inclusive start column of the source class declaration name")
+        sourceClassStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the source class declaration name")
+        sourceClassEndLine: Int,
+        @McpDescription("1-based exclusive end column of the source class declaration name")
+        sourceClassEndColumn: Int,
+        @McpDescription("Qualified name of the existing interface supertype to widen the class usages to")
+        targetInterfaceFqn: String,
+    ): String {
+        if (targetInterfaceFqn.isBlank()) {
+            return com.example.airefactoring.mcp.McpRefactoringResult.failure(
+                com.example.airefactoring.mcp.McpRefactoringErrorCode.UNSUPPORTED_TARGET,
+                "Target interface FQN must not be empty.",
+            ).toJson()
+        }
+        return useInterfaceWherePossibleOperation.execute(
+            currentCoroutineContext().project,
+            pathInProject,
+            sourceClassStartLine,
+            sourceClassStartColumn,
+            sourceClassEndLine,
+            sourceClassEndColumn,
+            targetInterfaceFqn,
+        )
+    }
+
+    @McpTool
     @McpDescription(CONVERT_TO_INSTANCE_METHOD_DESCRIPTION)
     suspend fun java_convert_to_instance_method(
         @McpDescription("Java file path relative to the project root") pathInProject: String,
@@ -808,5 +842,10 @@ class JavaRefactorToolset(
             "Push Members Down moves 1..N public members of one exact Java superclass into its existing direct subclasses using IntelliJ's native " +
                 "Push Members Down refactoring, driven headlessly with no dialog. Use it after reading the superclass, its members, and the target subclasses, choosing the members and hierarchy targets explicitly, and waiting for " +
                 "user approval. The agent explicitly selects the source superclass declaration-name range (start inclusive, end exclusive), ordered member declaration-name ranges (start inclusive, end exclusive) of public instance methods and public static final fields belonging to that superclass, and the qualified names of the direct subclasses. The plugin neither fills in nor changes those decisions; methods become abstract in the source and concrete in each target, Javadoc is fixed at 0, and only public members are movable in V1. This is Java-only, native, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
+
+        const val JAVA_USE_INTERFACE_WHERE_POSSIBLE_DESCRIPTION =
+            "Use Interface Where Possible rewrites the project-wide type usages (fields, parameters, local variables, method return types) of one exact Java class to one explicitly chosen existing interface supertype using IntelliJ's native " +
+                "Use Interface Where Possible refactoring (TurnRefsToSuperProcessor), driven headlessly with no dialog. Use it after reading the source class and the target interface, choosing both explicitly, and waiting for " +
+                "user approval. The agent explicitly selects the source class declaration-name range (start inclusive, end exclusive) and the qualified name of an existing interface supertype (transitive inheritance allowed). The plugin neither fills in nor changes those decisions; the target must be an interface (class supertypes are refused in V1) and replaceInstanceOf is fixed off so 'x instanceof Source' operands are kept. Native data-flow analysis decides which references can safely widen; automatic variable renames are reported as renamedVariables. This is Java-only, native, and reports native conflicts before mutation. Never use direct text edits, patches, whole-file rewrites, or direct PSI mutation as a fallback. Returns JSON with ok=true on success or ok=false with a stable error code on failure with one native Undo."
     }
 }
