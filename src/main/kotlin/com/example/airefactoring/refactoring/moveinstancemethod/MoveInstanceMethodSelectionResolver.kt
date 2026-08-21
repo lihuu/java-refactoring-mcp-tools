@@ -71,12 +71,13 @@ class MoveInstanceMethodSelectionResolver(
         val variable = findExactDeclaration(targetTarget, PsiVariable::class.java)
             ?: return failure(
                 McpRefactoringErrorCode.INVALID_RANGE,
-                "The target range must exactly select a variable declaration name.",
+                "The target range must exactly select the declaration name of a reference-typed " +
+                    "parameter of the selected method - not a field, a local variable, or a type reference.",
             )
         if (variable !is PsiParameter || method.parameterList.parameters.none { it === variable }) {
             return failure(
                 McpRefactoringErrorCode.UNSUPPORTED_TARGET,
-                "The target must be a parameter of the selected method.",
+                "The target must be a parameter of the selected method; fields and local variables are rejected.",
             )
         }
         val targetType = variable.type as? PsiClassType

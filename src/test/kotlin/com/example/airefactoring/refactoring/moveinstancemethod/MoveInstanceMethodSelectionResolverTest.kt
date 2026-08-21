@@ -217,6 +217,52 @@ class MoveInstanceMethodSelectionResolverTest : LightJavaCodeInsightFixtureTestC
         )
     }
 
+    fun testLocalVariableTargetFailureStatesParameterOnlyRule() {
+        mirrorRealFile(
+            "example/Local.java",
+            "class Local { void run() { int temp = 5; } }",
+        )
+        val result = resolver.resolve(
+            project = project,
+            pathInProject = "example/Local.java",
+            methodRange = rangeOf("example/Local.java", "run"),
+            targetRange = rangeOf("example/Local.java", "temp"),
+            newVisibility = "public",
+        )
+        assertTrue("expected failure but was $result", result is MoveInstanceMethodSelectionResolution.Failure)
+        val failure = result as MoveInstanceMethodSelectionResolution.Failure
+        assertEquals("UNSUPPORTED_TARGET", failure.code.name)
+        assertTrue(
+            "message must state the full parameter-only contract but was: ${failure.message}",
+            failure.message.contains("fields and local variables are rejected"),
+        )
+    }
+
+    fun testFieldTargetFailureCarriesFullContractGuidance() {
+        mirrorRealFile(
+            "example/Unrelated.java",
+            "class Unrelated { Customer customer; void run() {} }",
+        )
+        mirrorRealFile(
+            "example/Customer.java",
+            "class Customer { double rate() { return 0; } }",
+        )
+        val result = resolver.resolve(
+            project = project,
+            pathInProject = "example/Unrelated.java",
+            methodRange = rangeOf("example/Unrelated.java", "run"),
+            targetRange = rangeOf("example/Unrelated.java", "customer"),
+            newVisibility = "public",
+        )
+        assertTrue("expected failure but was $result", result is MoveInstanceMethodSelectionResolution.Failure)
+        val failure = result as MoveInstanceMethodSelectionResolution.Failure
+        assertEquals("UNSUPPORTED_TARGET", failure.code.name)
+        assertTrue(
+            "message must reject fields and locals explicitly but was: ${failure.message}",
+            failure.message.contains("fields and local variables are rejected"),
+        )
+    }
+
     private fun parameterFixture() {
         mirrorRealFile(
             "example/Order.java",
