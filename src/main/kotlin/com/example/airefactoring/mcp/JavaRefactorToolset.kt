@@ -198,7 +198,11 @@ class JavaRefactorToolset(
         targetEndLine: Int,
         @McpDescription("1-based exclusive end column of the target parameter name")
         targetEndColumn: Int,
-        @McpDescription("New visibility of the moved method: 'public', 'protected', 'private', or empty for package-local")
+        @McpDescription(
+            "Required. Visibility of the moved method after the move: 'public', 'protected', " +
+                "'private', or '' (empty string) for package-local. This parameter is mandatory; " +
+                "never send JSON null and never omit it.",
+        )
         newVisibility: String,
     ): String = moveInstanceMethodOperation.execute(
         currentCoroutineContext().project,
@@ -287,7 +291,10 @@ class JavaRefactorToolset(
         setterNames: List<String>,
         @McpDescription("Field visibility after encapsulation: null or 'asIs' retains current, otherwise 'private', 'protected', or 'packageLocal'")
         fieldsVisibility: String? = null,
-        @McpDescription("Accessor visibility: 'public', 'protected', 'packageLocal', or 'private'")
+        @McpDescription(
+            "Required. Accessor visibility: 'public', 'protected', 'packageLocal', or 'private'. " +
+                "This parameter is mandatory; never send JSON null and never omit it.",
+        )
         accessorsVisibility: String,
         @McpDescription("Whether to generate and use getters")
         encapsulateGet: Boolean,
