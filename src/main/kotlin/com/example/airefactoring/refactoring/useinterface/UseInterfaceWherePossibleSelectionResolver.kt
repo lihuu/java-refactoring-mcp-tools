@@ -48,7 +48,7 @@ class UseInterfaceWherePossibleSelectionResolver(
             is JavaSourceTargetResolution.Success -> r.target
         }
         val sourceClass = exactDeclaration(classTarget, PsiClass::class.java)
-            ?: return failure(McpRefactoringErrorCode.UNSUPPORTED_TARGET, "Source class range must exactly match a class declaration name.")
+            ?: return failure(McpRefactoringErrorCode.UNSUPPORTED_TARGET, "Source class range must exactly match a class declaration name in the file that declares it - not a usage site such as a field, parameter, or local variable.")
         if (sourceClass.isInterface || sourceClass.isEnum || sourceClass.isAnnotationType) {
             return failure(McpRefactoringErrorCode.UNSUPPORTED_TARGET, "Source must be a concrete class, not an interface/enum/annotation.")
         }

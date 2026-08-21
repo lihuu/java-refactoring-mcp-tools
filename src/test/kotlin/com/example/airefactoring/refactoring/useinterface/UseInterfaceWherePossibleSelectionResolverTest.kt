@@ -78,6 +78,22 @@ class UseInterfaceWherePossibleSelectionResolverTest : LightJavaCodeInsightFixtu
         assertTrue(result is UseInterfaceWherePossibleSelectionResolution.Failure)
     }
 
+    fun testUsageSiteSelectionFailureStatesDeclarationOnlyRule() {
+        fixture()
+        mirrorFile(
+            "a/Checkout.java",
+            "package a; public class Checkout { private Impl impl; }",
+        )
+        val result = resolve("a/Checkout.java", "Impl", "a.Widenable")
+        assertTrue("expected failure but was $result", result is UseInterfaceWherePossibleSelectionResolution.Failure)
+        val failure = result as UseInterfaceWherePossibleSelectionResolution.Failure
+        assertEquals("UNSUPPORTED_TARGET", failure.code.name)
+        assertTrue(
+            "message must reject usage sites explicitly but was: ${failure.message}",
+            failure.message.contains("not a usage site"),
+        )
+    }
+
     private fun resolve(
         path: String,
         needle: String,

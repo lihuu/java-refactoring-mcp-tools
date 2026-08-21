@@ -70,7 +70,11 @@ class IntellijExtractSuperclassExecutor internal constructor(
                 JavaPsiFacade.getInstance(project).findClass(qualified, GlobalSearchScope.allScope(project))
             }
             if (existingClass != null) {
-                throw ExtractSuperclassConflictException("Superclass '$qualified' already exists.")
+                throw ExtractSuperclassConflictException(
+                    "Superclass '$qualified' already exists. Extract Superclass always creates a " +
+                        "brand-new class; to give another existing class a shared supertype, call " +
+                        "java_extract_interface instead.",
+                )
             }
             val canCreate = ReadAction.compute<String?, RuntimeException> {
                 com.intellij.refactoring.util.RefactoringMessageUtil.checkCanCreateClass(targetDirectory, preparation.superclassName)

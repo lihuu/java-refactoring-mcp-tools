@@ -81,6 +81,22 @@ class IntellijExtractSuperclassExecutorTest : LightJavaCodeInsightFixtureTestCas
         assertNull(JavaPsiFacade.getInstance(project).findClass(beforeQualified, GlobalSearchScope.allScope(project)))
     }
 
+    fun testConflictMessageSuggestsExtractInterfaceAlternative() {
+        val (sourceFile, _) = fixture()
+        val first = prepare(sourceFile, listOf("doIt"), "ServiceSuperC", "example.api")
+        runExecutor { execWithNoDialog { executor.extract(project, first) } }
+        val second = prepare(sourceFile, listOf("run"), "ServiceSuperC", "example.api")
+        try {
+            runExecutor { execWithNoDialog { executor.extract(project, second) } }
+            fail("expected ExtractSuperclassConflictException for an existing superclass")
+        } catch (e: ExtractSuperclassConflictException) {
+            assertTrue(
+                "conflict message must point at java_extract_interface but was: ${e.message}",
+                e.message!!.contains("java_extract_interface"),
+            )
+        }
+    }
+
     private fun fixture(): Pair<PsiJavaFile, PsiJavaFile> {
         val source = mirrorRealFile("example/Service.java", """
             package example;
