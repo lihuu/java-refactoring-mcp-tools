@@ -15,6 +15,7 @@ import com.intellij.refactoring.move.moveInstanceMethod.MethodCallUsageInfo
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodHandler
 import com.intellij.refactoring.move.moveInstanceMethod.MoveInstanceMethodProcessor
 import com.intellij.usageView.UsageInfo
+import com.intellij.util.SlowOperations
 import com.intellij.util.containers.MultiMap
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
@@ -51,8 +52,12 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
             PreparedNativeExecution(
                 method,
                 target,
-                HeadlessMoveInstanceMethodProcessor(project, method, target, nativeVisibility(preparation.newVisibility),
-                    MoveInstanceMethodHandler.suggestParameterNames(method, target)),
+                HeadlessMoveInstanceMethodProcessor(
+                    project, method, target, nativeVisibility(preparation.newVisibility),
+                    SlowOperations.allowSlowOperations<Map<PsiClass, String>, RuntimeException> {
+                        MoveInstanceMethodHandler.suggestParameterNames(method, target)
+                    },
+                ),
             )
         }
         val usageFacts = withContext(Dispatchers.Default) {
