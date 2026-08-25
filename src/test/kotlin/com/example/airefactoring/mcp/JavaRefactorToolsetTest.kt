@@ -61,6 +61,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             "java_change_signature_add_parameter" in names,
         )
         assertTrue("java_inline_variable missing", "java_inline_variable" in names)
+        assertTrue("java_inline_method missing", "java_inline_method" in names)
         assertTrue("java_introduce_constant missing", "java_introduce_constant" in names)
         assertTrue("java_introduce_field missing", "java_introduce_field" in names)
         assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
@@ -74,8 +75,26 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_pull_members_up missing", "java_pull_members_up" in names)
         assertTrue("java_push_members_down missing", "java_push_members_down" in names)
         assertTrue("java_use_interface_where_possible missing", "java_use_interface_where_possible" in names)
-        assertEquals(18, names.count { it.startsWith("java_") })
+        assertTrue("java_introduce_parameter_object missing", "java_introduce_parameter_object" in names)
+        assertTrue("java_locate_symbol missing", "java_locate_symbol" in names)
+        assertEquals(20, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testInlineMethodSchemaAndDescriptionPreserveNativeAllUsagesContract() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }
+            .single { it.name == "java_inline_method" }
+        assertEquals(
+            setOf("pathInProject", "methodStartLine", "methodStartColumn", "methodEndLine", "methodEndColumn", "projectPath"),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertTrue(
+            descriptor.inputSchema.requiredProperties.containsAll(
+                setOf("pathInProject", "methodStartLine", "methodStartColumn", "methodEndLine", "methodEndColumn"),
+            ),
+        )
+        assertTrue(descriptor.description.contains("native Inline Method"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
     }
 
     fun testIntroduceParameterSchemaContainsExactlySixDeclaredArguments() {

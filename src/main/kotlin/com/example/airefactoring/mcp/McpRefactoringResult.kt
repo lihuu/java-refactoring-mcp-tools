@@ -90,6 +90,9 @@ data class McpRefactoringResult private constructor(
     val memberNames: List<String>? = null,
     val renamedVariables: List<String>? = null,
     val targetPackage: String? = null,
+    val parameterObjectClass: String? = null,
+    val placement: String? = null,
+    val mergedParameterCount: Int? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -256,6 +259,24 @@ data class McpRefactoringResult private constructor(
             filePath = filePath,
             targetDescription = targetDescription,
             nativeUsageCount = nativeUsageCount,
+            summary = summary,
+        )
+
+        fun inlineMethodSuccess(
+            projectBasePath: String,
+            filePath: String,
+            methodName: String,
+            inlinedOccurrenceCount: Int,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_inline_method",
+            projectBasePath = projectBasePath,
+            filePath = filePath,
+            methodName = methodName,
+            inlinedOccurrenceCount = inlinedOccurrenceCount,
+            affectedFiles = affectedFiles,
             summary = summary,
         )
 
@@ -484,6 +505,30 @@ data class McpRefactoringResult private constructor(
             nativeUsageCount = nativeUsageCount,
             affectedFiles = affectedFiles,
             renamedVariables = renamedVariables,
+            summary = summary,
+        )
+
+        fun introduceParameterObjectSuccess(
+            projectBasePath: String,
+            filePath: String,
+            methodName: String,
+            parameterObjectClass: String,
+            placement: String,
+            mergedParameterCount: Int,
+            nativeUsageCount: Int,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_introduce_parameter_object",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            methodName = methodName,
+            parameterObjectClass = parameterObjectClass,
+            placement = placement,
+            mergedParameterCount = mergedParameterCount,
+            nativeUsageCount = nativeUsageCount,
+            affectedFiles = affectedFiles,
             summary = summary,
         )
 

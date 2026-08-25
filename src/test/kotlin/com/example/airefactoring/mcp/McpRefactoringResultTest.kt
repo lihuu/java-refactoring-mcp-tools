@@ -749,6 +749,51 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("code"))
     }
 
+    fun testInlineMethodSuccessContainsMethodAndOccurrenceFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.inlineMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "src/main/java/example/PricingRules.java",
+                methodName = "addTax",
+                inlinedOccurrenceCount = 2,
+                affectedFiles = listOf("example/Checkout.java", "example/PricingRules.java"),
+                summary = "Inlined 2 Java calls to 'addTax' and removed its declaration.",
+            ).toJson(),
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_inline_method", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/main/java/example/PricingRules.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("addTax", obj.getValue("methodName").jsonPrimitive.content)
+        assertEquals(2, obj.getValue("inlinedOccurrenceCount").jsonPrimitive.int)
+        assertEquals(
+            listOf("example/Checkout.java", "example/PricingRules.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals("Inlined 2 Java calls to 'addTax' and removed its declaration.", obj.getValue("summary").jsonPrimitive.content)
+        assertFalse(obj.containsKey("code"))
+        assertFalse(obj.containsKey("message"))
+        assertFalse(obj.containsKey("variableName"))
+        assertFalse(obj.containsKey("requestedVariableName"))
+    }
+
+    fun testInlineMethodSuccessOmitsAbsentOptionalFieldsOnlyWhenPresent() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.inlineMethodSuccess(
+                projectBasePath = "/project",
+                filePath = "src/A.java",
+                methodName = "m",
+                inlinedOccurrenceCount = 1,
+                affectedFiles = listOf("src/A.java"),
+                summary = "Inlined 1 Java calls to 'm' and removed its declaration.",
+            ).toJson(),
+        ).jsonObject
+        assertTrue(obj.containsKey("affectedFiles"))
+        assertFalse(obj.containsKey("variableName"))
+        assertFalse(obj.containsKey("parameterName"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))

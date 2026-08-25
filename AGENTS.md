@@ -26,6 +26,13 @@ When a user asks to extract Java code into a method or split a complex Java meth
 - Tests: `./gradlew test`.
 - Distribution: `./gradlew buildPlugin`.
 - Preserve one-command Undo for every write tool.
+- **Gradle/IDE process discipline:** Reuse the compatible Gradle daemon for ordinary `test` and
+  `buildPlugin` invocations; do not pass `--no-daemon` unless isolation is explicitly required.
+  Run Gradle test/build commands strictly one at a time and wait for the same command to exit
+  before starting another—never launch a replacement merely because an agent-side wait window
+  elapsed. `runE2eIde`, `runDemoIde`, and `runIde` each start a full IDEA JVM: run at most one of
+  them at a time, wait for it to exit before another Gradle/IDE run, and confirm no leftover JVMs
+  after acceptance. Do not stop existing daemons or kill JVMs without the user's authorization.
 
 ## Real MCP end-to-end acceptance
 

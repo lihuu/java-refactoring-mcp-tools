@@ -86,6 +86,10 @@ val e2eWorkspace = layout.buildDirectory.dir("e2e-workspace")
 val e2eSandbox = layout.buildDirectory.dir("e2e-sandbox")
 val e2eMcpPort = 3001
 
+val demoProjectSource = layout.projectDirectory.dir("src/test/testData/e2e/demo-project")
+val demoWorkspace = layout.buildDirectory.dir("demo-workspace")
+val demoSandbox = layout.buildDirectory.dir("demo-sandbox")
+
 val prepareE2eFixture = tasks.register<Sync>("prepareE2eFixture") {
     group = "verification"
     description = "Resets the disposable Java project used by real IDEA MCP acceptance."
@@ -161,6 +165,82 @@ val runE2eIde = intellijPlatformTesting.runIde.register("runE2eIde") {
                 "-Dide.experimental.ui.onboarding=false",
                 "-Djb.consents.confirmation.enabled=false",
                 "-Djb.privacy.policy.text=<!--999.999-->",
+            )
+        }
+    }
+}
+
+val prepareDemoProject = tasks.register<Sync>("prepareDemoProject") {
+    group = "verification"
+    description = "Resets the disposable demo project used for agent-driven refactoring experiments."
+    outputs.upToDateWhen { false }
+    doFirst {
+        delete(demoWorkspace)
+    }
+    from(demoProjectSource)
+    into(demoWorkspace)
+    includeEmptyDirs = false
+}
+
+val runDemoIde = intellijPlatformTesting.runIde.register("runDemoIde") {
+    sandboxDirectory.set(demoSandbox)
+
+    prepareSandboxTask {
+        doFirst {
+            delete(
+                demoSandbox.get().dir("config_runDemoIde").asFile,
+                demoSandbox.get().dir("system_runDemoIde").asFile,
+                demoSandbox.get().dir("log_runDemoIde").asFile,
+            )
+        }
+        doLast {
+            val optionsDirectory = sandboxConfigDirectory.get().asFile.resolve("options")
+            optionsDirectory.mkdirs()
+            optionsDirectory.resolve("mcpServer.xml").writeText(
+                """
+                <application>
+                  <component name="McpServerSettings">
+                    <option name="enableMcpServer" value="true" />
+                    <option name="mcpServerPort" value="$e2eMcpPort" />
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
+            optionsDirectory.resolve("trusted-paths.xml").writeText(
+                """
+                <application>
+                  <component name="Trusted.Paths">
+                    <option name="TRUSTED_PROJECT_PATHS">
+                      <map>
+                        <entry key="${demoWorkspace.get().asFile.absolutePath}" value="true" />
+                      </map>
+                    </option>
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
+            optionsDirectory.resolve("registry.xml").writeText(
+                """
+                <application>
+                  <component name="Registry">
+                    <entry key="ide.experimental.ui.onboarding" value="false" />
+                  </component>
+                </application>
+                """.trimIndent(),
+            )
+        }
+    }
+
+    task {
+        group = "verification"
+        description = "Launches the demo project in an MCP-enabled IDEA sandbox for agent-driven refactoring."
+        dependsOn(prepareDemoProject)
+        args(demoWorkspace.get().asFile.absolutePath)
+        jvmArgumentProviders += CommandLineArgumentProvider {
+            listOf(
+                "-Didea.trust.all.projects=true",
+                "-Dide.experimental.ui.onboarding=false",
+                "-Djb.consents.confirmation.enabled=false",
             )
         }
     }

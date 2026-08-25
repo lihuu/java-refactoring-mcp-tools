@@ -4,6 +4,7 @@ import com.example.airefactoring.refactoring.SourceRange
 import com.example.airefactoring.refactoring.changesignature.ChangeSignatureOperation
 import com.example.airefactoring.refactoring.extractmethod.ExtractMethodOperation
 import com.example.airefactoring.refactoring.inlinevariable.InlineVariableOperation
+import com.example.airefactoring.refactoring.inlinemethod.InlineMethodOperation
 import com.example.airefactoring.refactoring.introducemember.IntroduceConstantOperation
 import com.example.airefactoring.refactoring.introducemember.IntroduceFieldOperation
 import com.example.airefactoring.refactoring.introduceparameter.IntroduceParameterOperation
@@ -16,6 +17,7 @@ import com.example.airefactoring.refactoring.locator.LocateSymbolOperation
 import com.example.airefactoring.refactoring.pullup.PullMembersUpOperation
 import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
 import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossibleOperation
+import com.example.airefactoring.refactoring.introduceparameterobject.IntroduceParameterObjectOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -31,6 +33,7 @@ class JavaRefactorToolset(
     private val introduceVariableOperation: IntroduceVariableOperation = IntroduceVariableOperation(),
     private val changeSignatureOperation: ChangeSignatureOperation = ChangeSignatureOperation(),
     private val inlineVariableOperation: InlineVariableOperation = InlineVariableOperation(),
+    private val inlineMethodOperation: InlineMethodOperation = InlineMethodOperation(),
     private val introduceConstantOperation: IntroduceConstantOperation = IntroduceConstantOperation(),
     private val introduceFieldOperation: IntroduceFieldOperation = IntroduceFieldOperation(),
     private val introduceParameterOperation: IntroduceParameterOperation = IntroduceParameterOperation(),
@@ -44,6 +47,7 @@ class JavaRefactorToolset(
     private val pullMembersUpOperation: PullMembersUpOperation = PullMembersUpOperation(),
     private val pushMembersDownOperation: PushMembersDownOperation = PushMembersDownOperation(),
     private val useInterfaceWherePossibleOperation: UseInterfaceWherePossibleOperation = UseInterfaceWherePossibleOperation(),
+    private val introduceParameterObjectOperation: IntroduceParameterObjectOperation = IntroduceParameterObjectOperation(),
     private val locateSymbolOperation: LocateSymbolOperation = LocateSymbolOperation(),
 ) : McpToolset {
 
@@ -132,6 +136,20 @@ class JavaRefactorToolset(
         pathInProject,
         line,
         column,
+    )
+
+    @McpTool
+    @McpDescription(INLINE_METHOD_DESCRIPTION)
+    suspend fun java_inline_method(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the method declaration name") methodStartLine: Int,
+        @McpDescription("1-based inclusive start column of the method declaration name") methodStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the method declaration name") methodEndLine: Int,
+        @McpDescription("1-based exclusive end column of the method declaration name") methodEndColumn: Int,
+    ): String = inlineMethodOperation.execute(
+        currentCoroutineContext().project,
+        pathInProject,
+        SourceRange(methodStartLine, methodStartColumn, methodEndLine, methodEndColumn),
     )
 
     @McpTool
@@ -664,6 +682,41 @@ class JavaRefactorToolset(
         )
     }
 
+    @McpTool
+    @McpDescription(JAVA_INTRODUCE_PARAMETER_OBJECT_DESCRIPTION)
+    suspend fun java_introduce_parameter_object(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the method declaration name")
+        methodStartLine: Int,
+        @McpDescription("1-based inclusive start column of the method declaration name")
+        methodStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the method declaration name")
+        methodEndLine: Int,
+        @McpDescription("1-based exclusive end column of the method declaration name")
+        methodEndColumn: Int,
+        @McpDescription("Selected parameter names from the target method") parameterNames: List<String>,
+        @McpDescription("Placement strategy: 'new_top_level', 'new_inner_class', or 'existing_class'")
+        placement: String,
+        @McpDescription("Class name for new_top_level or new_inner_class") className: String? = null,
+        @McpDescription("Target package for new_top_level") targetPackage: String? = null,
+        @McpDescription("Existing class FQN for existing_class") existingClassFqn: String? = null,
+        @McpDescription("Required. Whether to generate accessors") generateAccessors: Boolean,
+        @McpDescription("Required. Whether to escalate visibility") escalateVisibility: Boolean,
+    ): String = introduceParameterObjectOperation.execute(
+        project = currentCoroutineContext().project,
+        pathInProject = pathInProject,
+        methodRange = SourceRange(
+            methodStartLine, methodStartColumn, methodEndLine, methodEndColumn,
+        ),
+        parameterNames = parameterNames,
+        placement = placement,
+        className = className,
+        targetPackage = targetPackage,
+        existingClassFqn = existingClassFqn,
+        generateAccessors = generateAccessors,
+        escalateVisibility = escalateVisibility,
+    )
+
     private companion object {
         const val LOCATE_SYMBOL_DESCRIPTION =
             "Read-only locator: returns the exact 1-based declaration-name ranges of every " +
@@ -726,6 +779,16 @@ class JavaRefactorToolset(
                 "direct text edits, patches, whole-file rewrites, or direct PSI mutation as a " +
                 "fallback when the native refactoring rejects the target. Returns JSON with " +
                 "ok=true on success or ok=false with a stable error code on failure."
+
+        const val INLINE_METHOD_DESCRIPTION =
+            "Inlines every supported Java direct call to one method and deletes its declaration using " +
+                "IntelliJ's native Inline Method refactoring. Read the complete method and its callers, " +
+                "present the proposed change, and wait for user approval. The target is a project-relative " +
+                "Java file path and a 1-based exact declaration-name range (start inclusive, end exclusive). " +
+                "After success re-read every affectedFiles entry and run diagnostics, build, and tests. " +
+                "Rejects constructors, hierarchy methods, recursion, method references, unsupported usages, " +
+                "and native conflicts. Never use direct text edits, patches, whole-file rewrites, or direct " +
+                "PSI mutation as a fallback. Returns JSON with ok=true on success or a stable error code."
 
         const val INTRODUCE_CONSTANT_DESCRIPTION =
             "Introduces one exact Java expression as one private static final constant field of " +
@@ -840,6 +903,9 @@ class JavaRefactorToolset(
                 "ConvertToInstanceMethodProcessor; never uses direct text edits, patches, file " +
                 "rewrites, or PSI mutation as a fallback. Returns JSON with ok=true on success or " +
                 "ok=false with a stable error code on failure."
+
+        const val JAVA_INTRODUCE_PARAMETER_OBJECT_DESCRIPTION =
+            "Introduces a Java parameter object via IntelliJ's native Introduce Parameter Object refactoring. Use it after reading the target method and its callers, choosing the parameter group and placement explicitly. The method range must exactly select the PsiMethod nameIdentifier (1-based, start inclusive, end exclusive). parameterNames selects a non-empty duplicate-free subset of the method's parameters (declaration order preserved). placement is exactly one of 'new_top_level', 'new_inner_class', 'existing_class': new_top_level requires className and targetPackage, new_inner_class requires className only, existing_class requires existingClassFqn only. generateAccessors and escalateVisibility are required booleans (false is explicit, EscalateVisible when true). Uses native JavaIntroduceParameterObjectClassDescriptor and IntroduceParameterObjectProcessor without Dialog; Never use direct text edits, patches, WriteCommandAction, or PSI mutation as fallback. Returns ok=true with parameterObjectClass, placement, mergedParameterCount, nativeUsageCount, affectedFiles (sorted), summary, or ok=false with stable code. Always re-read affectedFiles after success."
 
         const val JAVA_ENCAPSULATE_FIELDS_DESCRIPTION =
             "Encapsulate Fields encapsulates 1..N fields of the same Java class using IntelliJ's native " +

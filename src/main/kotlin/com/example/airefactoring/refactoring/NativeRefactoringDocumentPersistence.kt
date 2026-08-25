@@ -42,14 +42,32 @@ internal class NativeRefactoringDocumentPersistence(
                 documentFor(file)?.let { file to it }
             }
             documents.forEach { (_, document) -> save(document) }
-            val unsavedPaths = documents
+            var unsavedPaths = documents
                 .filter { (_, document) -> isUnsaved(document) }
                 .map { (file) -> file.path }
             if (unsavedPaths.isNotEmpty()) {
-                throw NativeRefactoringPersistenceException(
-                    "Could not confirm saving native refactoring document(s): " +
-                        unsavedPaths.joinToString(),
-                )
+                // Inline Method and other processors may leave documents dirty due to
+                // post-refactoring VFS refresh / dumb mode. Retry once after re-commit.
+                commitAllDocuments(project)
+                documents.forEach { (_, document) ->
+                    if (isUnsaved(document)) save(document)
+                }
+                unsavedPaths = documents
+                    .filter { (_, document) -> isUnsaved(document) }
+                    .map { (file) -> file.path }
+                // If still unsaved but files on disk already reflect the document text,
+                // treat as success to avoid false REFACTORING_FAILED after a correct mutation.
+                if (unsavedPaths.isNotEmpty()) {
+                    val stillDirty = documents.filter { (file, document) ->
+                        isUnsaved(document) && !fileContentsMatchDocument(file, document)
+                    }.map { (file) -> file.path }
+                    if (stillDirty.isNotEmpty()) {
+                        throw NativeRefactoringPersistenceException(
+                            "Could not confirm saving native refactoring document(s): " +
+                                stillDirty.joinToString(),
+                        )
+                    }
+                }
             }
         } catch (exception: NativeRefactoringPersistenceException) {
             throw exception
@@ -59,6 +77,17 @@ internal class NativeRefactoringDocumentPersistence(
                     files.joinToString { it.path },
                 exception,
             )
+        }
+    }
+
+    private fun fileContentsMatchDocument(file: VirtualFile, document: Document): Boolean {
+        return try {
+            val bytes = file.contentsToByteArray()
+            val fileText = String(bytes, Charsets.UTF_8)
+            // Normalize line endings for comparison
+            fileText.replace("\r\n", "\n") == document.text.replace("\r\n", "\n")
+        } catch (_: Exception) {
+            false
         }
     }
 }

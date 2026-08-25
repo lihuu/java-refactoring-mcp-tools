@@ -59,9 +59,14 @@ class NativeRefactoringDocumentPersistenceTest : LightJavaCodeInsightFixtureTest
 
     fun testUnsavedDocumentAfterSaveIsReportedWithAffectedPath() {
         val affected = mirrorRealFile("StillDirty.java", "class StillDirty {}")
+        val document = FileDocumentManager.getInstance().getDocument(affected)!!
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.insertString(document.textLength, "\n// dirty")
+        }
 
         val exception = expectPersistenceFailure {
             NativeRefactoringDocumentPersistence(
+                save = { /* no-op: keep file vs document mismatch */ },
                 isUnsaved = { true },
             ).persist(project, setOf(affected))
         }
