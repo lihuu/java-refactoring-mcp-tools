@@ -13,6 +13,12 @@ internal fun interface NativeRefactoringDocumentPersister {
 /**
  * Completes a native refactoring write by committing PSI and saving only the files the caller
  * identified as affected. It deliberately never calls saveAllDocuments().
+ *
+ * Leniency: after a retry, if the on-disk file contents already equal the in-memory [Document]
+ * text (modulo CRLF/LF), the file is considered persisted even when [FileDocumentManager.isDocumentUnsaved]
+ * still reports dirty. This tolerates VFS refresh/dumb-mode timing where the document remains
+ * marked unsaved despite the file having been written, preventing false REFACTORING_FAILED after
+ * a correct native mutation. See [fileContentsMatchDocument].
  */
 internal class NativeRefactoringDocumentPersistence(
     private val commitAllDocuments: (Project) -> Unit = {

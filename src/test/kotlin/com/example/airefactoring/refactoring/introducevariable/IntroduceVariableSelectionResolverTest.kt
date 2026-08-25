@@ -108,6 +108,7 @@ class IntroduceVariableSelectionResolverTest : LightJavaCodeInsightFixtureTestCa
         myFixture.configureByText(fileName, markedText)
         val range = sourceRangeFromEditor()
         mirrorRealFile(fileName, myFixture.editor.document.text)
+        com.intellij.testFramework.IndexingTestUtil.waitUntilIndexesAreReady(project)
         return range
     }
 
