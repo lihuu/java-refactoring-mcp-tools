@@ -103,7 +103,10 @@ class IntroduceParameterObjectSelectionResolver(
         }
         if (selectedParamsOrdered.size != parameterNames.size) {
             val unknown = parameterNames.filter { it !in methodParamsByName }
-            if (unknown.isNotEmpty()) return failure(McpRefactoringErrorCode.INVALID_RANGE, "Unknown parameter(s): ${unknown.joinToString()}.")
+            if (unknown.isNotEmpty()) {
+                val actual = method.parameterList.parameters.joinToString { it.name ?: "<null>" }
+                return failure(McpRefactoringErrorCode.INVALID_RANGE, "Unknown parameter(s): ${unknown.joinToString()}. Method has: [$actual]")
+            }
             // Should not happen, but handle
             return failure(McpRefactoringErrorCode.INVALID_RANGE, "Parameter selection mismatch.")
         }

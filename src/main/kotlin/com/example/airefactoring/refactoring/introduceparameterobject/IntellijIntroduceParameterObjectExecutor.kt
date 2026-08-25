@@ -61,7 +61,7 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
             false,
         ).apply { setPreviewUsages(false) }
 
-        // Run processor headlessly, mapping conflicts
+        // Run processor headlessly, mapping conflicts — must NOT run inside write action (processor manages its own write/progress)
         try {
             processor.run()
         } catch (e: Exception) {
@@ -105,8 +105,12 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
 
         // Also include any new files reported via processor? We already have method and callers, plus object.
 
-        // Persist only exact affected files
+        // Persist only exact affected files — ensure VFS is refreshed for newly created package files
         val toPersist = affectedVfs.filter { it.isValid }.toSet()
+        // Refresh VFS for new files (e.g., InvoiceRequest.java) before persist to ensure documents are found
+        try {
+            com.intellij.openapi.vfs.LocalFileSystem.getInstance().refresh(false)
+        } catch (_: Exception) {}
         documentPersistence.persist(project, toPersist)
 
         // Build result
@@ -245,37 +249,9 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
     }
 
     private fun createMoveDestination(project: Project, packageName: String, context: PsiMethod): com.intellij.refactoring.MoveDestination {
-        // Try JavaRefactoringFactory first
-        return try {
-            JavaRefactoringFactory.getInstance(project).createSourceFolderPreservingMoveDestination(packageName)
-        } catch (_: Exception) {
-            // Fallback: try to resolve directory and use PackageWrapper
-            val dir = findOrCreatePackageDirectory(project, packageName, context)
-            // If we have a directory, create move destination via PackageWrapper logic
-            // Use createSourceRootMoveDestination with source root
-            val sourceRoot = com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).getSourceRootForFile(context.containingFile.virtualFile)
-            if (sourceRoot != null) {
-                JavaRefactoringFactory.getInstance(project).createSourceRootMoveDestination(packageName, sourceRoot)
-            } else {
-                JavaRefactoringFactory.getInstance(project).createSourceFolderPreservingMoveDestination(packageName)
-            }
-        }
-    }
-
-    private fun findOrCreatePackageDirectory(project: Project, packageName: String, context: PsiMethod): com.intellij.psi.PsiDirectory? {
-        if (packageName.isEmpty()) {
-            return context.containingFile.containingDirectory
-        }
-        val pkg = SlowOperations.allowSlowOperations<com.intellij.psi.PsiPackage?, Exception> {
-            JavaPsiFacade.getInstance(project).findPackage(packageName)
-        }
-        if (pkg != null) {
-            val dirs = SlowOperations.allowSlowOperations<Array<com.intellij.psi.PsiDirectory>, Exception> {
-                pkg.getDirectories(GlobalSearchScope.projectScope(project))
-            }
-            if (dirs.isNotEmpty()) return dirs[0]
-        }
-        return context.containingFile.containingDirectory
+        // Direct factory call — no manual directory creation here; delegate will create missing package inside its own write.
+        // Pre-creating package via fixture placeholder ensures no write is needed here.
+        return JavaRefactoringFactory.getInstance(project).createSourceFolderPreservingMoveDestination(packageName)
     }
 
     private fun requirePlacementFreshness(

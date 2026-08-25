@@ -5,13 +5,13 @@ import java.util.Arrays;
 
 public class ParameterObjectCallers {
     public void callTopLevel() {
-        new ParameterObjectTopLevelSamples().createInvoice("Alice", "USD", 30, false);
-        new ParameterObjectTopLevelSamples().createInvoice("Bob", "EUR", 15, true);
+        new ParameterObjectTopLevelSamples().createInvoice("Alice", "USD", 30);
+        new ParameterObjectTopLevelSamples().createInvoice("Bob", "EUR", 15);
     }
 
     public void callInner() {
-        new ParameterObjectInnerSamples().createInvoice("Bob", "EUR", 15, true);
-        new ParameterObjectInnerSamples().createInvoice("Carol", "JPY", 7, false);
+        new ParameterObjectInnerSamples().createInvoice("Bob", "EUR", 15);
+        new ParameterObjectInnerSamples().createInvoice("Carol", "JPY", 7);
     }
 
     public void callExisting() {

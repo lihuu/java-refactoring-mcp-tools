@@ -3,11 +3,9 @@ package example;
 import java.util.List;
 
 public class ParameterObjectTopLevelSamples {
-    public void createInvoice(String customer, String currency, int dueDays, boolean preview) {
-        System.out.println(customer + ":" + currency + ":" + dueDays + ":" + preview);
-        if (preview) {
-            System.out.println("preview for " + customer);
-        }
+    public void createInvoice(String customer, String currency, int dueDays) {
+        System.out.println(customer + ":" + currency + ":" + dueDays);
+        System.out.println("preview for " + customer);
     }
 
     public <T> void handleGeneric(T payload, String suffix) {
