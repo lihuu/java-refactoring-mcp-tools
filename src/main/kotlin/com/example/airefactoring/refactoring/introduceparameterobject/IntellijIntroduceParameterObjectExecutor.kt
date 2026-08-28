@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.introduceparameterobject
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiMethod
@@ -43,23 +44,33 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
         requirePlacementFreshness(preparation, existingClass)
         requireAffectedFilesFreshness(project, method, preparation)
 
-        // Build ParameterInfoImpls in declaration order with original indices
-        val allParams = method.parameterList.parameters
-        val paramInfos = selectedParams.map { param ->
-            val index = allParams.indexOf(param)
-            if (index < 0) throw IntroduceParameterObjectPreparationException("Parameter not found in method.")
-            ParameterInfoImpl.create(index).withName(param.name).withType(param.type)
-        }.toTypedArray()
+        // Build ParameterInfoImpls in declaration order with original indices.
+        // Processor construction (parameter type resolution via CanonicalTypes) is a slow
+        // operation; run it off-EDT in a read action. The native processor's run() stays on EDT.
+        // Processor construction performs native parameter-type resolution (CanonicalTypes) and
+        // descriptor building, which are slow operations. Run construction off-EDT in a read action;
+        // the native processor's run() stays on EDT where it manages its own write/progress.
+        val processor: com.intellij.refactoring.introduceParameterObject.IntroduceParameterObjectProcessor<*, *, *> =
+            withContext(Dispatchers.Default) {
+                ReadAction.compute<com.intellij.refactoring.introduceParameterObject.IntroduceParameterObjectProcessor<*, *, *>, RuntimeException> {
+                    val allParams = method.parameterList.parameters
+                    val paramInfos = selectedParams.map { param ->
+                        val index = allParams.indexOf(param)
+                        if (index < 0) throw IntroduceParameterObjectPreparationException("Parameter not found in method.")
+                        ParameterInfoImpl.create(index).withName(param.name).withType(param.type)
+                    }.toTypedArray()
 
-        // Build descriptor
-        val descriptor = buildDescriptor(project, preparation, method, paramInfos, existingClass)
+                    // Build descriptor
+                    val descriptor = buildDescriptor(project, preparation, method, paramInfos, existingClass)
 
-        val processor = IntroduceParameterObjectProcessor(
-            method,
-            descriptor,
-            paramInfos.toList(),
-            false,
-        ).apply { setPreviewUsages(false) }
+                    IntroduceParameterObjectProcessor<PsiMethod, ParameterInfoImpl, com.intellij.refactoring.introduceparameterobject.JavaIntroduceParameterObjectClassDescriptor>(
+                        method,
+                        descriptor,
+                        paramInfos.toList(),
+                        false,
+                    ).apply { setPreviewUsages(false) }
+                }
+            }
 
         // Run processor headlessly, mapping conflicts — must NOT run inside write action (processor manages its own write/progress)
         try {
@@ -97,9 +108,11 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
             JavaParameterObjectPlacement.EXISTING_CLASS -> preparation.existingClassFqn ?: ""
         }
 
-        // Find PsiClass for created/reused object to add its file — slow operation, allow explicitly
-        val objectClass = SlowOperations.allowSlowOperations<com.intellij.psi.PsiClass?, Exception> {
-            JavaPsiFacade.getInstance(project).findClass(createdFqn, GlobalSearchScope.allScope(project))
+        // Find PsiClass for created/reused object to add its file — slow operation, run off-EDT
+        val objectClass = withContext(Dispatchers.Default) {
+            ReadAction.compute<com.intellij.psi.PsiClass?, RuntimeException> {
+                JavaPsiFacade.getInstance(project).findClass(createdFqn, GlobalSearchScope.allScope(project))
+            }
         }
         objectClass?.containingFile?.virtualFile?.let { affectedVfs.add(it) }
 
@@ -134,10 +147,10 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
                 JavaParameterObjectPlacement.NEW_INNER_CLASS -> "new_inner_class"
                 JavaParameterObjectPlacement.EXISTING_CLASS -> "existing_class"
             },
-            mergedParameterCount = paramInfos.size,
+            mergedParameterCount = selectedParams.size,
             nativeUsageCount = nativeUsageCount,
             affectedFiles = affectedRel,
-            summary = "Introduced parameter object '$createdFqn' for ${paramInfos.size} parameters of '${method.name}'.",
+            summary = "Introduced parameter object '$createdFqn' for ${selectedParams.size} parameters of '${method.name}'.",
         )
     }
 
@@ -294,24 +307,26 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
         // but we keep the check explicit for completeness (stored values are authoritative).
     }
 
-    private fun requireAffectedFilesFreshness(
+    private suspend fun requireAffectedFilesFreshness(
         project: Project,
         method: PsiMethod,
         preparation: IntroduceParameterObjectPreparation,
     ) {
         // Re-search current references and compare file inventory to snapshot
-        val currentAffected = SlowOperations.allowSlowOperations<Set<com.intellij.openapi.vfs.VirtualFile>, Exception> {
-            val files = mutableSetOf<com.intellij.openapi.vfs.VirtualFile>()
-            method.containingFile?.virtualFile?.let { files.add(it) }
-            preparation.existingClassPointer?.element?.containingFile?.virtualFile?.let { files.add(it) }
-            val refs = ReferencesSearch.search(method, GlobalSearchScope.projectScope(project), false).findAll()
-            for (ref in refs) {
-                val vf = ref.element.containingFile?.virtualFile ?: continue
-                if (!vf.isValid) throw IntroduceParameterObjectPreparationException("A caller file became invalid.")
-                if (!vf.isWritable) throw IntroduceParameterObjectPreparationException("A caller file became read-only.")
-                files.add(vf)
+        val currentAffected = withContext(Dispatchers.Default) {
+            ReadAction.compute<Set<com.intellij.openapi.vfs.VirtualFile>, RuntimeException> {
+                val files = mutableSetOf<com.intellij.openapi.vfs.VirtualFile>()
+                method.containingFile?.virtualFile?.let { files.add(it) }
+                preparation.existingClassPointer?.element?.containingFile?.virtualFile?.let { files.add(it) }
+                val refs = ReferencesSearch.search(method, GlobalSearchScope.projectScope(project), false).findAll()
+                for (ref in refs) {
+                    val vf = ref.element.containingFile?.virtualFile ?: continue
+                    if (!vf.isValid) throw IntroduceParameterObjectPreparationException("A caller file became invalid.")
+                    if (!vf.isWritable) throw IntroduceParameterObjectPreparationException("A caller file became read-only.")
+                    files.add(vf)
+                }
+                files
             }
-            files
         }
         // Snapshot contains method file + existing class file + caller files at resolve time.
         // If inventory drifted (new caller added, file deleted, or made read-only), reject.
