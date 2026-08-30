@@ -77,9 +77,34 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_use_interface_where_possible missing", "java_use_interface_where_possible" in names)
         assertTrue("java_introduce_parameter_object missing", "java_introduce_parameter_object" in names)
         assertTrue("java_replace_method_with_method_object missing", "java_replace_method_with_method_object" in names)
+        assertTrue("java_move_class missing", "java_move_class" in names)
         assertTrue("java_locate_symbol missing", "java_locate_symbol" in names)
-        assertEquals(21, names.count { it.startsWith("java_") })
+        assertEquals(22, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testMoveClassSchemaAndDescriptionPreserveContract() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }
+            .single { it.name == "java_move_class" }
+        assertEquals(
+            setOf(
+                "pathInProject", "classStartLine", "classStartColumn", "classEndLine", "classEndColumn",
+                "targetPackage", "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertTrue(
+            descriptor.inputSchema.requiredProperties.containsAll(
+                setOf(
+                    "pathInProject", "classStartLine", "classStartColumn", "classEndLine", "classEndColumn",
+                    "targetPackage",
+                ),
+            ),
+        )
+        assertTrue(descriptor.description.contains("Move Class"))
+        assertTrue(descriptor.description.contains("top-level"))
+        assertTrue(descriptor.description.contains("affectedFiles"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
     }
 
     fun testReplaceMethodWithMethodObjectSchemaAndDescriptionPreserveContract() {

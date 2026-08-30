@@ -19,6 +19,7 @@ import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
 import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossibleOperation
 import com.example.airefactoring.refactoring.introduceparameterobject.IntroduceParameterObjectOperation
 import com.example.airefactoring.refactoring.extractmethodobject.ExtractMethodObjectOperation
+import com.example.airefactoring.refactoring.moveclass.MoveClassOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
 import com.example.airefactoring.refactoring.makestatic.JavaMakeStaticOperation
@@ -50,6 +51,7 @@ class JavaRefactorToolset(
     private val useInterfaceWherePossibleOperation: UseInterfaceWherePossibleOperation = UseInterfaceWherePossibleOperation(),
     private val introduceParameterObjectOperation: IntroduceParameterObjectOperation = IntroduceParameterObjectOperation(),
     private val extractMethodObjectOperation: ExtractMethodObjectOperation = ExtractMethodObjectOperation(),
+    private val moveClassOperation: MoveClassOperation = MoveClassOperation(),
     private val locateSymbolOperation: LocateSymbolOperation = LocateSymbolOperation(),
 ) : McpToolset {
 
@@ -743,6 +745,28 @@ class JavaRefactorToolset(
         methodObjectMethodName = methodObjectMethodName,
     )
 
+    @McpTool
+    @McpDescription(JAVA_MOVE_CLASS_DESCRIPTION)
+    suspend fun java_move_class(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the class declaration name")
+        classStartLine: Int,
+        @McpDescription("1-based inclusive start column of the class declaration name")
+        classStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the class declaration name")
+        classEndLine: Int,
+        @McpDescription("1-based exclusive end column of the class declaration name")
+        classEndColumn: Int,
+        @McpDescription("Destination package for the moved class") targetPackage: String,
+    ): String = moveClassOperation.execute(
+        project = currentCoroutineContext().project,
+        pathInProject = pathInProject,
+        classRange = SourceRange(
+            classStartLine, classStartColumn, classEndLine, classEndColumn,
+        ),
+        targetPackage = targetPackage,
+    )
+
     private companion object {
         const val LOCATE_SYMBOL_DESCRIPTION =
             "Read-only locator: returns the exact 1-based declaration-name ranges of every " +
@@ -935,6 +959,9 @@ class JavaRefactorToolset(
 
         const val JAVA_REPLACE_METHOD_WITH_METHOD_OBJECT_DESCRIPTION =
             "Replaces a Java method with a Method Object using IntelliJ's native Replace Method with Method Object refactoring (ExtractMethodObjectProcessor), driven headlessly with no dialog. Use it after reading the target method, choosing the inner-class Method Object name and the object's method name explicitly, and waiting for user approval. The method range must exactly select the PsiMethod nameIdentifier (1-based, start inclusive, end exclusive); the method must have a non-empty extractable body or the tool returns NO_EXTRACTABLE_ELEMENTS. The refactoring creates an inner-class Method Object that holds the method's migrated locals as fields plus a method named methodObjectMethodName containing the extracted body; the original public method is kept as a thin delegate, so call sites are preserved by design. Never use direct text edits, patches, WriteCommandAction, or PSI mutation as fallback. Returns ok=true with methodObjectClass, methodObjectMethodName, migratedFieldCount, affectedFiles (sorted), summary, or ok=false with stable code. Always re-read affectedFiles after success."
+
+        const val JAVA_MOVE_CLASS_DESCRIPTION =
+            "Moves a single top-level Java class to a target package using IntelliJ's native Move Class refactoring (MoveClassesOrPackagesProcessor), driven headlessly with no dialog. Use it after reading the target class and its referencing files, choosing the destination package explicitly, and waiting for user approval. The class range must exactly select the PsiClass nameIdentifier (1-based, start inclusive, end exclusive); the target must be a concrete top-level class (not an inner class, enum, interface, or annotation) and the target package must differ from the current package or the tool returns UNSUPPORTED_TARGET. If a class with the same name already exists in the target package, the tool returns REFACTORING_CONFLICT. The refactoring relocates the class file, rewrites the package declaration, and updates all Java references (imports / qualified names). Never use direct text edits, patches, WriteCommandAction, or PSI mutation as fallback. Returns ok=true with sourceClass, targetPackage, affectedFiles (sorted), summary, or ok=false with stable code. Always re-read affectedFiles after success."
 
         const val JAVA_ENCAPSULATE_FIELDS_DESCRIPTION =
             "Encapsulate Fields encapsulates 1..N fields of the same Java class using IntelliJ's native " +

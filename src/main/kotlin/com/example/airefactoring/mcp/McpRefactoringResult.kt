@@ -557,6 +557,24 @@ data class McpRefactoringResult private constructor(
             summary = summary,
         )
 
+        fun moveClassSuccess(
+            projectBasePath: String,
+            filePath: String,
+            sourceClass: String,
+            targetPackage: String,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_move_class",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            sourceClass = sourceClass,
+            targetPackage = targetPackage,
+            affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
         fun failure(code: McpRefactoringErrorCode, message: String) =
             McpRefactoringResult(ok = false, code = code, message = message)
     }
