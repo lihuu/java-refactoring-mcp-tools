@@ -4,6 +4,7 @@ import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistenc
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiMethod
 import com.intellij.refactoring.extractMethod.PrepareFailedException
@@ -16,6 +17,12 @@ import kotlinx.coroutines.withContext
 class IntellijExtractMethodObjectExecutor internal constructor(
     private val documentPersistence: NativeRefactoringDocumentPersister = NativeRefactoringDocumentPersistence(),
 ) : ExtractMethodObjectExecutor {
+
+    /** Prepared native processor + extract processor, built off-EDT. */
+    private data class PreparedNative(
+        val processor: ExtractMethodObjectProcessor,
+        val extractProcessor: com.intellij.refactoring.extractMethodObject.ExtractMethodObjectProcessor.MyExtractMethodProcessor,
+    )
 
     override suspend fun replace(
         project: Project,
@@ -30,33 +37,46 @@ class IntellijExtractMethodObjectExecutor internal constructor(
             )
         }
 
-        val command = Runnable {
-            val processor = ExtractMethodObjectProcessor(
-                project,
-                null,
-                method.body!!.statements,
-                preparation.methodObjectClassName,
-            )
-            processor.setCreateInnerClass(true)
-            val ep = processor.getExtractProcessor()
-            ep.setShowErrorDialogs(false)
-            ep.setPreviewSupported(false)
-            try {
-                if (!ep.prepare()) {
+        // Processor construction and prepare() touch file/stub indexes and resolve types, which are
+        // slow operations; run them off-EDT in a read action. The native mutation itself stays on EDT.
+        val prepared: PreparedNative = withContext(Dispatchers.Default) {
+            ReadAction.compute<PreparedNative, RuntimeException> {
+                val processor = ExtractMethodObjectProcessor(
+                    project,
+                    null,
+                    method.body!!.statements,
+                    preparation.methodObjectClassName,
+                )
+                processor.setCreateInnerClass(true)
+                val ep = processor.getExtractProcessor()
+                ep.setShowErrorDialogs(false)
+                ep.setPreviewSupported(false)
+                try {
+                    if (!ep.prepare()) {
+                        throw ExtractMethodObjectPreparationException(
+                            "The method cannot be replaced with a method object.",
+                        )
+                    }
+                } catch (e: PrepareFailedException) {
                     throw ExtractMethodObjectPreparationException(
-                        "The method cannot be replaced with a method object.",
+                        "The method cannot be replaced with a method object: ${e.message}",
+                        e,
                     )
                 }
-            } catch (e: PrepareFailedException) {
-                throw ExtractMethodObjectPreparationException(
-                    "The method cannot be replaced with a method object: ${e.message}",
-                    e,
-                )
+                ep.setMethodName(preparation.methodObjectMethodName)
+                ep.setDataFromInputVariables()
+                PreparedNative(processor, ep)
             }
-            ep.setMethodName(preparation.methodObjectMethodName)
-            ep.setDataFromInputVariables()
+        }
+
+        val command = Runnable {
             try {
-                ExtractMethodObjectHandler.extractMethodObject(project, null, processor, ep)
+                ExtractMethodObjectHandler.extractMethodObject(
+                    project,
+                    null,
+                    prepared.processor,
+                    prepared.extractProcessor,
+                )
             } catch (e: Exception) {
                 if (isConflict(e)) {
                     throw ExtractMethodObjectConflictException(
