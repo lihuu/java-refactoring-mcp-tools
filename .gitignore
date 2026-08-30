@@ -12,3 +12,5 @@ out/
 
 # Local config
 local.properties
+.alma-snapshots
+.claude/
