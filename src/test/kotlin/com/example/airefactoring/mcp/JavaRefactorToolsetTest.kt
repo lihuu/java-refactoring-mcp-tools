@@ -76,9 +76,35 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_push_members_down missing", "java_push_members_down" in names)
         assertTrue("java_use_interface_where_possible missing", "java_use_interface_where_possible" in names)
         assertTrue("java_introduce_parameter_object missing", "java_introduce_parameter_object" in names)
+        assertTrue("java_replace_method_with_method_object missing", "java_replace_method_with_method_object" in names)
         assertTrue("java_locate_symbol missing", "java_locate_symbol" in names)
-        assertEquals(20, names.count { it.startsWith("java_") })
+        assertEquals(21, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
+    }
+
+    fun testReplaceMethodWithMethodObjectSchemaAndDescriptionPreserveContract() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }
+            .single { it.name == "java_replace_method_with_method_object" }
+        assertEquals(
+            setOf(
+                "pathInProject", "methodStartLine", "methodStartColumn", "methodEndLine", "methodEndColumn",
+                "methodObjectClassName", "methodObjectMethodName", "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertTrue(
+            descriptor.inputSchema.requiredProperties.containsAll(
+                setOf(
+                    "pathInProject", "methodStartLine", "methodStartColumn", "methodEndLine", "methodEndColumn",
+                    "methodObjectClassName", "methodObjectMethodName",
+                ),
+            ),
+        )
+        assertTrue(descriptor.description.contains("Replace Method with Method Object"))
+        assertTrue(descriptor.description.contains("inner-class"))
+        assertTrue(descriptor.description.contains("call sites are preserved"))
+        assertTrue(descriptor.description.contains("affectedFiles"))
+        assertTrue(descriptor.description.contains("Never use direct text edits"))
     }
 
     fun testInlineMethodSchemaAndDescriptionPreserveNativeAllUsagesContract() {

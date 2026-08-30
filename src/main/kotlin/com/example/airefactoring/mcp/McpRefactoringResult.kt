@@ -93,6 +93,9 @@ data class McpRefactoringResult private constructor(
     val parameterObjectClass: String? = null,
     val placement: String? = null,
     val mergedParameterCount: Int? = null,
+    val methodObjectClass: String? = null,
+    val methodObjectMethodName: String? = null,
+    val migratedFieldCount: Int? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -528,6 +531,28 @@ data class McpRefactoringResult private constructor(
             placement = placement,
             mergedParameterCount = mergedParameterCount,
             nativeUsageCount = nativeUsageCount,
+            affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun replaceMethodWithMethodObjectSuccess(
+            projectBasePath: String,
+            filePath: String,
+            methodName: String,
+            methodObjectClass: String,
+            methodObjectMethodName: String,
+            migratedFieldCount: Int,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_replace_method_with_method_object",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            methodName = methodName,
+            methodObjectClass = methodObjectClass,
+            methodObjectMethodName = methodObjectMethodName,
+            migratedFieldCount = migratedFieldCount,
             affectedFiles = affectedFiles,
             summary = summary,
         )
