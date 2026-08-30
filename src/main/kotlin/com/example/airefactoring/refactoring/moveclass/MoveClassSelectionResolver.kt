@@ -75,6 +75,18 @@ class MoveClassSelectionResolver(
             )
         }
 
+        // A class with the same name already in the target package would make the native processor
+        // show a confirmation dialog; reject it here as a structured conflict before construction.
+        val targetFqn = targetPackage.trim() + "." + (cls.name ?: "")
+        val existing = com.intellij.psi.JavaPsiFacade.getInstance(project)
+            .findClass(targetFqn, com.intellij.psi.search.GlobalSearchScope.allScope(project))
+        if (existing != null && existing != cls) {
+            return failure(
+                McpRefactoringErrorCode.REFACTORING_CONFLICT,
+                "A class '$targetFqn' already exists in the target package.",
+            )
+        }
+
         // Affected files: class file + all referencing files.
         val affectedFiles = mutableSetOf<VirtualFile>()
         affectedFiles.add(classVf)

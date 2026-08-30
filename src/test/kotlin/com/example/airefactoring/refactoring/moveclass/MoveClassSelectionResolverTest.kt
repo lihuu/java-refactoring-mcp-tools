@@ -144,6 +144,26 @@ class MoveClassSelectionResolverTest : LightJavaCodeInsightFixtureTestCase() {
         assertTrue(prep.affectedVirtualFiles.any { it.path.contains("McResolverRefsCaller.java") })
     }
 
+    fun testRejectsTargetPackageWithExistingSameNameClass() {
+        val path = "example/McResolverConflict.java"
+        mirrorRealFile(path, """
+            package example;
+            public class McResolverConflict {
+                public void m() {}
+            }
+        """.trimIndent())
+        mirrorRealFile("example/api/McResolverConflict.java", """
+            package example.api;
+            public class McResolverConflict {
+                public void m() {}
+            }
+        """.trimIndent())
+        com.intellij.testFramework.IndexingTestUtil.waitUntilIndexesAreReady(project)
+        val range = rangeForClass(path, "McResolverConflict")
+        val res = resolver.resolve(project, path, range, "example.api")
+        assertFailure(res, McpRefactoringErrorCode.REFACTORING_CONFLICT)
+    }
+
     private fun rangeForClass(path: String, className: String): SourceRange {
         val doc = document(path)
         val off = doc.text.indexOf(className)
