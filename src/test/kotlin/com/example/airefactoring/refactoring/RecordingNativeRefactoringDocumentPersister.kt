@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import java.nio.file.Path
 
 /** Records the exact document inventory handed to an executor's persistence boundary. */
@@ -21,5 +22,9 @@ internal class RecordingNativeRefactoringDocumentPersister : NativeRefactoringDo
             expectedRelativePaths.toSet(),
             persistedInventories.single(),
         )
+    }
+
+    fun assertPersistedNothing() {
+        assertTrue("persistence must not run", persistedInventories.isEmpty())
     }
 }

@@ -12,6 +12,7 @@ import com.intellij.psi.PsiField
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiModifier
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.refactoring.extractclass.ExtractClassProcessor
 import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,24 @@ class IntellijExtractDelegateExecutor internal constructor(
 ) : ExtractDelegateExecutor {
 
     override suspend fun extract(
+        project: Project,
+        preparation: ExtractDelegatePreparation,
+    ): ExtractDelegateExecutionResult {
+        // Drain pending external VFS refreshes for the target files while documents are still clean:
+        // a refresh landing after the processor dirties a document would raise the modal
+        // memory-disk conflict dialog and wedge the unattended IDE.
+        withContext(Dispatchers.Default) {
+            LocalFileSystem.getInstance().refreshIoFiles(
+                preparation.affectedVirtualFiles.map { java.io.File(it.path) },
+                /* async: */ false,
+                /* recursive: */ false,
+                null,
+            )
+        }
+        return extractOnEdt(project, preparation)
+    }
+
+    private suspend fun extractOnEdt(
         project: Project,
         preparation: ExtractDelegatePreparation,
     ): ExtractDelegateExecutionResult = withContext(Dispatchers.EDT) {
