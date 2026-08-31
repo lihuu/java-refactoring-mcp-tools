@@ -96,6 +96,7 @@ data class McpRefactoringResult private constructor(
     val methodObjectClass: String? = null,
     val methodObjectMethodName: String? = null,
     val migratedFieldCount: Int? = null,
+    val createdClass: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -571,6 +572,24 @@ data class McpRefactoringResult private constructor(
             projectBasePath = projectBasePath,
             sourceClass = sourceClass,
             targetPackage = targetPackage,
+            affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun extractDelegateSuccess(
+            projectBasePath: String,
+            filePath: String,
+            sourceClass: String,
+            createdClass: String,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_extract_delegate",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            sourceClass = sourceClass,
+            createdClass = createdClass,
             affectedFiles = affectedFiles,
             summary = summary,
         )

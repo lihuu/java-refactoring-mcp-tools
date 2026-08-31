@@ -19,6 +19,7 @@ import com.example.airefactoring.refactoring.pushdown.PushMembersDownOperation
 import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossibleOperation
 import com.example.airefactoring.refactoring.introduceparameterobject.IntroduceParameterObjectOperation
 import com.example.airefactoring.refactoring.extractmethodobject.ExtractMethodObjectOperation
+import com.example.airefactoring.refactoring.extractdelegate.ExtractDelegateOperation
 import com.example.airefactoring.refactoring.moveclass.MoveClassOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
@@ -52,6 +53,7 @@ class JavaRefactorToolset(
     private val introduceParameterObjectOperation: IntroduceParameterObjectOperation = IntroduceParameterObjectOperation(),
     private val extractMethodObjectOperation: ExtractMethodObjectOperation = ExtractMethodObjectOperation(),
     private val moveClassOperation: MoveClassOperation = MoveClassOperation(),
+    private val extractDelegateOperation: ExtractDelegateOperation = ExtractDelegateOperation(),
     private val locateSymbolOperation: LocateSymbolOperation = LocateSymbolOperation(),
 ) : McpToolset {
 
@@ -767,6 +769,38 @@ class JavaRefactorToolset(
         targetPackage = targetPackage,
     )
 
+    @McpTool
+    @McpDescription(JAVA_EXTRACT_DELEGATE_DESCRIPTION)
+    suspend fun java_extract_delegate(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the class declaration name")
+        classStartLine: Int,
+        @McpDescription("1-based inclusive start column of the class declaration name")
+        classStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the class declaration name")
+        classEndLine: Int,
+        @McpDescription("1-based exclusive end column of the class declaration name")
+        classEndColumn: Int,
+        @McpDescription("Names of fields to move into the extracted class (may be empty if methods are given)")
+        extractedFields: List<String>,
+        @McpDescription("Names of methods to move into the extracted class (may be empty if fields are given)")
+        extractedMethods: List<String>,
+        @McpDescription("Name of the new class that will hold the extracted members")
+        newClassName: String,
+        @McpDescription("true places the new class as a nested class inside the source; false creates a separate class in the same package")
+        extractInnerClass: Boolean,
+    ): String = extractDelegateOperation.execute(
+        project = currentCoroutineContext().project,
+        pathInProject = pathInProject,
+        classRange = SourceRange(
+            classStartLine, classStartColumn, classEndLine, classEndColumn,
+        ),
+        extractedFields = extractedFields,
+        extractedMethods = extractedMethods,
+        newClassName = newClassName,
+        extractInnerClass = extractInnerClass,
+    )
+
     private companion object {
         const val LOCATE_SYMBOL_DESCRIPTION =
             "Read-only locator: returns the exact 1-based declaration-name ranges of every " +
@@ -962,6 +996,24 @@ class JavaRefactorToolset(
 
         const val JAVA_MOVE_CLASS_DESCRIPTION =
             "Moves a single top-level Java class to a target package using IntelliJ's native Move Class refactoring (MoveClassesOrPackagesProcessor), driven headlessly with no dialog. Use it after reading the target class and its referencing files, choosing the destination package explicitly, and waiting for user approval. The class range must exactly select the PsiClass nameIdentifier (1-based, start inclusive, end exclusive); the target must be a concrete top-level class (not an inner class, enum, interface, or annotation) and the target package must differ from the current package or the tool returns UNSUPPORTED_TARGET. If a class with the same name already exists in the target package, the tool returns REFACTORING_CONFLICT. The refactoring relocates the class file, rewrites the package declaration, and updates all Java references (imports / qualified names). Never use direct text edits, patches, WriteCommandAction, or PSI mutation as fallback. Returns ok=true with sourceClass, targetPackage, affectedFiles (sorted), summary, or ok=false with stable code. Always re-read affectedFiles after success."
+
+        const val JAVA_EXTRACT_DELEGATE_DESCRIPTION =
+            "Extracts selected fields and methods of a single top-level class into a new delegate " +
+                "class using IntelliJ's native Extract Delegate refactoring (ExtractClassProcessor), " +
+                "driven headlessly with no dialog. Use it after reading the source class and its callers, " +
+                "choosing the extracted fields and methods, the new class name, and the placement " +
+                "(extractInnerClass=true places a nested class inside the source; false creates a separate " +
+                "class in the same package), and waiting for user approval. The class range must exactly " +
+                "select the PsiClass nameIdentifier (1-based, start inclusive, end exclusive); the target " +
+                "must be a concrete top-level class (not an inner class, enum, interface, or annotation), " +
+                "at least one field or method must be selected, and each name must uniquely match a " +
+                "non-constructor non-abstract member of that class or the tool returns UNSUPPORTED_TARGET " +
+                "or INVALID_RANGE. If a class named newClassName already exists in the package, the tool " +
+                "returns REFACTORING_CONFLICT. Kept methods and surrounding call sites are rewritten to " +
+                "delegate to the new class natively. Never use direct text edits, patches, " +
+                "WriteCommandAction, or PSI mutation as fallback. Returns ok=true with sourceClass, " +
+                "createdClass (qualified name of the new class), affectedFiles (sorted), summary, or " +
+                "ok=false with a stable error code. Always re-read affectedFiles after success."
 
         const val JAVA_ENCAPSULATE_FIELDS_DESCRIPTION =
             "Encapsulate Fields encapsulates 1..N fields of the same Java class using IntelliJ's native " +

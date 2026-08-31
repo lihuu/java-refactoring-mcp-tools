@@ -794,6 +794,32 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("parameterName"))
     }
 
+    fun testExtractDelegateSuccessContainsCreatedClassAndAffectedFiles() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.extractDelegateSuccess(
+                projectBasePath = "/project",
+                filePath = "src/OrderService.java",
+                sourceClass = "example.OrderService",
+                createdClass = "example.OrderDelegate",
+                affectedFiles = listOf("example/OrderCaller.java", "example/OrderDelegate.java", "src/OrderService.java"),
+                summary = "Extracted 1 field(s) and 1 method(s) from 'example.OrderService' into 'OrderDelegate'.",
+            ).toJson(),
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals("java_extract_delegate", obj.getValue("operation").jsonPrimitive.content)
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/OrderService.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("example.OrderService", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("example.OrderDelegate", obj.getValue("createdClass").jsonPrimitive.content)
+        assertEquals(
+            listOf("example/OrderCaller.java", "example/OrderDelegate.java", "src/OrderService.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(obj.containsKey("code"))
+        assertFalse(obj.containsKey("message"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))
