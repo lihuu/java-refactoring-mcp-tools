@@ -79,8 +79,12 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_replace_method_with_method_object missing", "java_replace_method_with_method_object" in names)
         assertTrue("java_move_class missing", "java_move_class" in names)
         assertTrue("java_extract_delegate missing", "java_extract_delegate" in names)
+        assertTrue(
+            "java_replace_inheritance_with_delegation missing",
+            "java_replace_inheritance_with_delegation" in names,
+        )
         assertTrue("java_locate_symbol missing", "java_locate_symbol" in names)
-        assertEquals(23, names.count { it.startsWith("java_") })
+        assertEquals(24, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -106,6 +110,31 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue(descriptor.description.contains("top-level"))
         assertTrue(descriptor.description.contains("affectedFiles"))
         assertTrue(descriptor.description.contains("Never use direct text edits"))
+    }
+
+    fun testReplaceInheritanceWithDelegationSchemaAndDescriptionPreserveContract() {
+        val descriptor = ReflectionToolsProvider().getTools().map { it.descriptor }
+            .single { it.name == "java_replace_inheritance_with_delegation" }
+        assertEquals(
+            setOf(
+                "pathInProject", "classStartLine", "classStartColumn", "classEndLine", "classEndColumn",
+                "targetBaseClassFqn", "fieldName", "delegateOtherMembers", "generateGetter", "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+        assertTrue(
+            descriptor.inputSchema.requiredProperties.containsAll(
+                setOf(
+                    "pathInProject", "classStartLine", "classStartColumn", "classEndLine", "classEndColumn",
+                    "targetBaseClassFqn", "fieldName", "delegateOtherMembers", "generateGetter",
+                ),
+            ),
+        )
+        assertTrue(descriptor.description.contains("Replace Inheritance with Delegation"))
+        assertTrue(descriptor.description.contains("InheritanceToDelegationProcessor"))
+        assertTrue(descriptor.description.contains("nameIdentifier"))
+        assertTrue(descriptor.description.contains("affectedFiles"))
+        assertTrue(descriptor.description.contains("Never use direct text"))
     }
 
     fun testExtractDelegateSchemaAndDescriptionPreserveContract() {

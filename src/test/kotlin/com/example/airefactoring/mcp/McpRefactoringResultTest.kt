@@ -820,6 +820,37 @@ class McpRefactoringResultTest : TestCase() {
         assertFalse(obj.containsKey("message"))
     }
 
+    fun testReplaceInheritanceWithDelegationSuccessContainsDelegationFields() {
+        val obj = Json.parseToJsonElement(
+            McpRefactoringResult.replaceInheritanceWithDelegationSuccess(
+                projectBasePath = "/project",
+                filePath = "src/Derived.java",
+                sourceClass = "example.Derived",
+                targetSuperclass = "example.Base",
+                delegateFieldName = "baseDelegate",
+                affectedFiles = listOf("src/Derived.java"),
+                summary = "Successfully replaced inheritance from 'example.Base' with delegation in 'example.Derived' using field 'baseDelegate'.",
+            ).toJson(),
+        ).jsonObject
+
+        assertTrue(obj.getValue("ok").jsonPrimitive.boolean)
+        assertEquals(
+            "java_replace_inheritance_with_delegation",
+            obj.getValue("operation").jsonPrimitive.content,
+        )
+        assertEquals("/project", obj.getValue("projectBasePath").jsonPrimitive.content)
+        assertEquals("src/Derived.java", obj.getValue("filePath").jsonPrimitive.content)
+        assertEquals("example.Derived", obj.getValue("sourceClass").jsonPrimitive.content)
+        assertEquals("example.Base", obj.getValue("targetSuperclass").jsonPrimitive.content)
+        assertEquals("baseDelegate", obj.getValue("delegateFieldName").jsonPrimitive.content)
+        assertEquals(
+            listOf("src/Derived.java"),
+            obj.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(obj.containsKey("code"))
+        assertFalse(obj.containsKey("message"))
+    }
+
     private fun assertInlineVariableFieldsAbsent(keys: Set<String>) {
         assertFalse(keys.contains("variableName"))
         assertFalse(keys.contains("inlinedOccurrenceCount"))

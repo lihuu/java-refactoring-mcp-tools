@@ -97,6 +97,7 @@ data class McpRefactoringResult private constructor(
     val methodObjectMethodName: String? = null,
     val migratedFieldCount: Int? = null,
     val createdClass: String? = null,
+    val delegateFieldName: String? = null,
     val summary: String? = null,
     val code: McpRefactoringErrorCode? = null,
     val message: String? = null,
@@ -590,6 +591,26 @@ data class McpRefactoringResult private constructor(
             projectBasePath = projectBasePath,
             sourceClass = sourceClass,
             createdClass = createdClass,
+            affectedFiles = affectedFiles,
+            summary = summary,
+        )
+
+        fun replaceInheritanceWithDelegationSuccess(
+            projectBasePath: String,
+            filePath: String,
+            sourceClass: String,
+            targetSuperclass: String,
+            delegateFieldName: String,
+            affectedFiles: List<String>,
+            summary: String,
+        ) = McpRefactoringResult(
+            ok = true,
+            operation = "java_replace_inheritance_with_delegation",
+            filePath = filePath,
+            projectBasePath = projectBasePath,
+            sourceClass = sourceClass,
+            targetSuperclass = targetSuperclass,
+            delegateFieldName = delegateFieldName,
             affectedFiles = affectedFiles,
             summary = summary,
         )

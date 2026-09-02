@@ -20,6 +20,7 @@ import com.example.airefactoring.refactoring.useinterface.UseInterfaceWherePossi
 import com.example.airefactoring.refactoring.introduceparameterobject.IntroduceParameterObjectOperation
 import com.example.airefactoring.refactoring.extractmethodobject.ExtractMethodObjectOperation
 import com.example.airefactoring.refactoring.extractdelegate.ExtractDelegateOperation
+import com.example.airefactoring.refactoring.replaceinheritance.ReplaceInheritanceWithDelegationOperation
 import com.example.airefactoring.refactoring.moveclass.MoveClassOperation
 import com.example.airefactoring.refactoring.moveinstancemethod.MoveInstanceMethodOperation
 import com.example.airefactoring.refactoring.safedelete.JavaSafeDeleteOperation
@@ -54,6 +55,7 @@ class JavaRefactorToolset(
     private val extractMethodObjectOperation: ExtractMethodObjectOperation = ExtractMethodObjectOperation(),
     private val moveClassOperation: MoveClassOperation = MoveClassOperation(),
     private val extractDelegateOperation: ExtractDelegateOperation = ExtractDelegateOperation(),
+    private val replaceInheritanceWithDelegationOperation: ReplaceInheritanceWithDelegationOperation = ReplaceInheritanceWithDelegationOperation(),
     private val locateSymbolOperation: LocateSymbolOperation = LocateSymbolOperation(),
 ) : McpToolset {
 
@@ -801,6 +803,38 @@ class JavaRefactorToolset(
         extractInnerClass = extractInnerClass,
     )
 
+    @McpTool
+    @McpDescription(JAVA_REPLACE_INHERITANCE_WITH_DELEGATION_DESCRIPTION)
+    suspend fun java_replace_inheritance_with_delegation(
+        @McpDescription("Java file path relative to the project root") pathInProject: String,
+        @McpDescription("1-based inclusive start line of the class declaration name")
+        classStartLine: Int,
+        @McpDescription("1-based inclusive start column of the class declaration name")
+        classStartColumn: Int,
+        @McpDescription("1-based line containing the exclusive end position of the class declaration name")
+        classEndLine: Int,
+        @McpDescription("1-based exclusive end column of the class declaration name")
+        classEndColumn: Int,
+        @McpDescription("Fully qualified name of the base class to replace with delegation")
+        targetBaseClassFqn: String,
+        @McpDescription("Name of the new delegate field holding the base-class instance")
+        fieldName: String,
+        @McpDescription("true generates delegating overrides so the class keeps its inherited API; false removes inherited members without replacement")
+        delegateOtherMembers: Boolean,
+        @McpDescription("true generates a public getter that exposes the delegate field")
+        generateGetter: Boolean,
+    ): String = replaceInheritanceWithDelegationOperation.execute(
+        project = currentCoroutineContext().project,
+        pathInProject = pathInProject,
+        classRange = SourceRange(
+            classStartLine, classStartColumn, classEndLine, classEndColumn,
+        ),
+        targetBaseClassFqn = targetBaseClassFqn,
+        fieldName = fieldName,
+        delegateOtherMembers = delegateOtherMembers,
+        generateGetter = generateGetter,
+    )
+
     private companion object {
         const val LOCATE_SYMBOL_DESCRIPTION =
             "Read-only locator: returns the exact 1-based declaration-name ranges of every " +
@@ -1014,6 +1048,22 @@ class JavaRefactorToolset(
                 "WriteCommandAction, or PSI mutation as fallback. Returns ok=true with sourceClass, " +
                 "createdClass (qualified name of the new class), affectedFiles (sorted), summary, or " +
                 "ok=false with a stable error code. Always re-read affectedFiles after success."
+
+        const val JAVA_REPLACE_INHERITANCE_WITH_DELEGATION_DESCRIPTION =
+            "Replaces the direct superclass of a top-level class with composition using IntelliJ's " +
+                "native Replace Inheritance with Delegation refactoring (InheritanceToDelegationProcessor), " +
+                "driven headlessly with no dialog. Use it after reading the class and its callers, " +
+                "choosing the delegate field name and the delegation policy, and waiting for user " +
+                "approval. The class range must exactly select the PsiClass nameIdentifier " +
+                "(1-based, start inclusive, end exclusive); the target must be a top-level class whose " +
+                "DIRECT superclass is targetBaseClassFqn — deeper ancestors and interface targets are " +
+                "rejected with INVALID_RANGE. delegateOtherMembers=true keeps the class API stable by " +
+                "generating delegating overrides for inherited members; generateGetter=true generates " +
+                "a public getter exposing the delegate field. Calls to inherited members are rewritten " +
+                "to the delegate field natively and the extends clause is removed. Never use direct " +
+                "text edits, patches, WriteCommandAction, or PSI mutation as fallback. Returns ok=true " +
+                "with sourceClass, targetSuperclass, delegateFieldName, affectedFiles (sorted), " +
+                "summary, or ok=false with a stable error code. Always re-read affectedFiles after success."
 
         const val JAVA_ENCAPSULATE_FIELDS_DESCRIPTION =
             "Encapsulate Fields encapsulates 1..N fields of the same Java class using IntelliJ's native " +
