@@ -73,6 +73,22 @@ intellijPlatform {
             untilBuild = providers.gradleProperty("pluginUntilBuild")
         }
     }
+
+    // JetBrains Marketplace upload. Secrets are supplied per-invocation (CI or local shell),
+    // never committed:
+    //   export MARKETPLACE_TOKEN=...                       # marketplace.jetbrains.com publish token
+    //   export MARKETPLACE_CERTIFICATE_CHAIN="$(cat chain.crt)"
+    //   export MARKETPLACE_PRIVATE_KEY="$(cat key.pem)"
+    //   export MARKETPLACE_PRIVATE_KEY_PASSWORD=...
+    //   ./gradlew signPlugin publishPlugin
+    publishing {
+        token = providers.environmentVariable("MARKETPLACE_TOKEN")
+    }
+    signing {
+        certificateChain = providers.environmentVariable("MARKETPLACE_CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("MARKETPLACE_PRIVATE_KEY")
+        password = providers.environmentVariable("MARKETPLACE_PRIVATE_KEY_PASSWORD")
+    }
 }
 
 tasks {

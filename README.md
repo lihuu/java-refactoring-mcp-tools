@@ -4,7 +4,14 @@ An IntelliJ IDEA plugin that exposes native IntelliJ refactorings to AI coding a
 IDE's built-in MCP Server, so agents plan and get approval before any source change — the plugin
 never edits text directly and never calls an LLM itself.
 
-The validation release exposes exactly one tool: **`java_extract_method`**.
+The plugin exposes **24 `java_*` tools** (plus a read-only symbol locator): local extractions
+(extract method, introduce variable/constant/field/parameter), API evolution (change signature,
+inline variable/method, safe delete), member ownership (move instance method, make static,
+convert to instance method, encapsulate fields), type structure (extract interface/superclass,
+pull/push members, use interface where possible), complex structural operations (introduce
+parameter object, replace method with method object, extract delegate, replace inheritance with
+delegation, move class), and `java_locate_symbol` for exact targeting coordinates. The full
+calling contract for every tool is documented in [docs/tool-contracts.md](docs/tool-contracts.md).
 
 ## Requirements
 
@@ -18,18 +25,18 @@ The validation release exposes exactly one tool: **`java_extract_method`**.
 ```text
 Codex (or another MCP client)
         |
-        | java_extract_method
+        | java_extract_method, java_replace_inheritance_with_delegation, ... (24 tools)
         v
 IntelliJ MCP Server
         |
         v
-java_extract_method (ExtractMethodMcpToolset)
+JavaRefactorToolset (one MCP adapter, one tool per native refactoring)
         |
         v
-Native IntelliJ Extract Method processor
+Native IntelliJ refactoring processor (ExtractMethodProcessor, InheritanceToDelegationProcessor, ...)
         |
         v
-PSI-aware source change grouped as one IDE command
+PSI-aware source change grouped as one IDE command (one Undo)
 ```
 
 The MCP Server owns transport, authentication, project routing, JSON Schema generation, and client

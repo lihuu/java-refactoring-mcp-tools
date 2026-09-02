@@ -4,9 +4,17 @@
     <vendor email="dev@example.com" url="https://example.com">example</vendor>
 
     <description><![CDATA[
-        Adds native Java refactoring operations to the built-in MCP Server.
-        The current release exposes Java Extract Method, Introduce Variable, Change Signature Add Parameter,
-        Inline Variable, Introduce Constant, and Introduce Field.
+        Adds native Java refactoring operations to the IDE's built-in MCP Server, so AI coding
+        agents can plan and execute real IDE refactorings through MCP instead of editing source
+        text directly. Every write tool drives one native IntelliJ refactoring processor headlessly
+        (no dialog), reports affected files, and stays reversible with exactly one Undo.
+
+        Exposes 24 Java tools: extract method, introduce variable / constant / field / parameter,
+        change signature (add parameter), inline variable / method, safe delete, move class, move
+        instance method, make static, convert to instance method, encapsulate fields, extract
+        interface / superclass, pull members up / push members down, use interface where possible,
+        introduce parameter object, replace method with method object, extract delegate, replace
+        inheritance with delegation, plus a read-only symbol locator.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
