@@ -10,8 +10,7 @@ inline variable/method, safe delete), member ownership (move instance method, ma
 convert to instance method, encapsulate fields), type structure (extract interface/superclass,
 pull/push members, use interface where possible), complex structural operations (introduce
 parameter object, replace method with method object, extract delegate, replace inheritance with
-delegation, move class), and `java_locate_symbol` for exact targeting coordinates. The full
-calling contract for every tool is documented in [docs/tool-contracts.md](docs/tool-contracts.md).
+delegation, move class), and `java_locate_symbol` for exact targeting coordinates.
 
 ## Requirements
 
