@@ -1,4 +1,4 @@
-# IntelliJ Refactoring MCP Tools
+# Java Refactoring MCP Tools
 
 ## Purpose
 

@@ -1,7 +1,7 @@
 <idea-plugin>
-    <id>com.example.airefactoring</id>
-    <name>IntelliJ Refactoring MCP Tools</name>
-    <vendor email="dev@example.com" url="https://example.com">example</vendor>
+    <id>io.github.lihuu.airefactoring</id>
+    <name>Java Refactoring MCP Tools</name>
+    <vendor email="18242685+lihuu@users.noreply.github.com" url="https://github.com/lihuu">lihuu</vendor>
 
     <description><![CDATA[
         Adds native Java refactoring operations to the IDE's built-in MCP Server, so AI coding

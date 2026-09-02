@@ -1,4 +1,4 @@
-# IntelliJ Refactoring MCP Tools
+# Java Refactoring MCP Tools
 
 An IntelliJ IDEA plugin that exposes native IntelliJ refactorings to AI coding agents through the
 IDE's built-in MCP Server, so agents plan and get approval before any source change — the plugin
