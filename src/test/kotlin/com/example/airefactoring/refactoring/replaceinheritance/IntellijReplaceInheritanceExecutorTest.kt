@@ -14,13 +14,9 @@ import com.intellij.psi.PsiElementFactory
 import com.intellij.psi.PsiJavaFile
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.PsiTestUtil
-import com.intellij.testFramework.dispatchAllEventsInIdeEventQueue
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
 import org.junit.Assert.*
 import org.junit.Test
-import kotlinx.coroutines.runBlocking
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -80,28 +76,11 @@ class IntellijReplaceInheritanceExecutorTest : LightJavaCodeInsightFixtureTestCa
         ) as PsiJavaFile).text
 
     /**
-     * Runs the suspend executor off the test (EDT) thread while pumping the IDE event queue,
-     * mirroring the accepted IntellijExtractDelegateExecutorTest pattern: calling runBlocking on
-     * the EDT itself deadlocks against the executor's `withContext(Dispatchers.EDT)` resumption.
+     * The executor's `withContext(Dispatchers.EDT)` resumption deadlocks if runBlocking is called
+     * on the EDT itself; pump the IDE event queue from a pool thread instead (shared helper).
      */
-    private fun <T> runExecutor(block: suspend () -> T): T {
-        val pool = Executors.newSingleThreadExecutor()
-        return try {
-            val f = pool.submit<T> { runBlocking { block() } }
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
-            while (System.nanoTime() < deadline && !f.isDone) {
-                dispatchAllEventsInIdeEventQueue()
-                Thread.sleep(1)
-            }
-            try {
-                f.get(1, TimeUnit.SECONDS)
-            } catch (e: java.util.concurrent.ExecutionException) {
-                throw e.cause ?: e
-            }
-        } finally {
-            pool.shutdownNow()
-        }
-    }
+    private fun <T> runExecutor(block: suspend () -> T): T =
+        com.example.airefactoring.refactoring.runExecutorOffEdt(block)
 
     private fun preparation(path: String, derivedCls: PsiClass): ReplaceInheritanceWithDelegationPreparation =
         ReplaceInheritanceWithDelegationPreparation(

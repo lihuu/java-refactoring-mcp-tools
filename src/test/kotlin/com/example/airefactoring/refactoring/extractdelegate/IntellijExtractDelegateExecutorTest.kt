@@ -12,13 +12,9 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.PsiTestUtil
-import com.intellij.testFramework.dispatchAllEventsInIdeEventQueue
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class IntellijExtractDelegateExecutorTest : LightJavaCodeInsightFixtureTestCase() {
 
@@ -251,24 +247,8 @@ class IntellijExtractDelegateExecutorTest : LightJavaCodeInsightFixtureTestCase(
         return vf
     }
 
-    private fun <T> runExecutor(block: suspend () -> T): T {
-        val pool = Executors.newSingleThreadExecutor()
-        return try {
-            val f = pool.submit<T> { runBlocking { block() } }
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
-            while (System.nanoTime() < deadline && !f.isDone) {
-                dispatchAllEventsInIdeEventQueue()
-                Thread.sleep(1)
-            }
-            try {
-                f.get(1, TimeUnit.SECONDS)
-            } catch (e: java.util.concurrent.ExecutionException) {
-                throw e.cause ?: e
-            }
-        } finally {
-            pool.shutdownNow()
-        }
-    }
+    private fun <T> runExecutor(block: suspend () -> T): T =
+        com.example.airefactoring.refactoring.runExecutorOffEdt(block)
 
     private fun <T> runWithNoDialog(block: suspend () -> T): T {
         val throwing = object : TestDialog {
