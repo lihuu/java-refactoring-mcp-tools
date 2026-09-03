@@ -7,6 +7,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.util.Ref
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
@@ -39,24 +40,21 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
                 buildFieldDescriptors(fields, preparation)
             }
         }
+        var usageFacts: NativeUsageFacts? = null
         val prepared = withContext(Dispatchers.EDT) {
             val descriptor = buildDescriptor(containingClass, descriptors, preparation)
             PreparedNativeExecution(
                 containingClass = containingClass,
                 fields = fields,
-                processor = HeadlessEncapsulateFieldsProcessor(project, descriptor),
+                processor = HeadlessEncapsulateFieldsProcessor(project, descriptor) { usages ->
+                    // Captured from the framework's preprocessUsages call, pre-mutation.
+                    usageFacts = NativeUsageFacts(
+                        nativeUsageCount = usages.size,
+                        affectedFiles = projectRelativeAffectedFiles(project, usages, preparation, containingClass),
+                        filesToPersist = affectedVirtualFiles(containingClass, usages),
+                    )
+                },
             )
-        }
-
-        val usageFacts = withContext(Dispatchers.Default) {
-            ReadAction.computeBlocking<NativeUsageFacts, RuntimeException> {
-                val usages = prepared.processor.findUsagesNative()
-                NativeUsageFacts(
-                    nativeUsageCount = usages.size,
-                    affectedFiles = projectRelativeAffectedFiles(project, usages, preparation, prepared.containingClass),
-                    filesToPersist = affectedVirtualFiles(prepared.containingClass, usages),
-                )
-            }
         }
 
         return withContext(Dispatchers.EDT) {
@@ -71,10 +69,14 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
                 prepared.processor.run()
             } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
                 throw EncapsulateFieldsConflictException(
-                    e.getMessages().distinct().joinToString(separator = "; "),
+                    e.getMessages().distinct().joinToString("; "),
                 )
             }
-            documentPersistence.persist(project, usageFacts.filesToPersist)
+            // The native run() flow hands its usage inventory to preprocessUsages; the facts are
+            // captured there (pre-mutation) instead of invoking the @OverrideOnly findUsages() ourselves.
+            val facts = usageFacts
+                ?: throw EncapsulateFieldsPreparationException("The native refactoring did not report its usages.")
+            documentPersistence.persist(project, facts.filesToPersist)
 
             EncapsulateFieldsExecutionResult(
                 fieldNames = preparation.fieldNames,
@@ -85,8 +87,8 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
                 encapsulateGet = preparation.encapsulateGet,
                 encapsulateSet = preparation.encapsulateSet,
                 useAccessorsWhenAccessible = preparation.useAccessorsWhenAccessible,
-                nativeUsageCount = usageFacts.nativeUsageCount,
-                affectedFiles = usageFacts.affectedFiles,
+                nativeUsageCount = facts.nativeUsageCount,
+                affectedFiles = facts.affectedFiles,
                 summary = "Encapsulated ${preparation.fieldNames.size} field(s) in ${preparation.containingClassQualifiedNameSnapshot} with ${preparation.accessorsVisibility} accessors.",
             )
         }
@@ -238,6 +240,7 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
     private class HeadlessEncapsulateFieldsProcessor(
         project: Project,
         descriptor: EncapsulateFieldsDescriptor,
+        private val usageFactsSink: (Array<UsageInfo>) -> Unit,
     ) : EncapsulateFieldsProcessor(project, descriptor), HeadlessEncapsulateFieldsProcessorOps {
         override fun showConflicts(
             conflicts: MultiMap<PsiElement, String>,
@@ -251,11 +254,15 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
             )
         }
 
-        override fun findUsagesNative(): Array<UsageInfo> = findUsages()
+        override fun preprocessUsages(usages: Ref<Array<UsageInfo>>): Boolean {
+            // The framework calls this with the same inventory the refactoring will consume —
+            // capturing it here keeps the usage facts native-computed without calling findUsages().
+            usageFactsSink(usages.get())
+            return super.preprocessUsages(usages)
+        }
     }
 
     private interface HeadlessEncapsulateFieldsProcessorOps {
-        fun findUsagesNative(): Array<UsageInfo>
         fun setPreviewUsages(preview: Boolean)
         fun run()
     }

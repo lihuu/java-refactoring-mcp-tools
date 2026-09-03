@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
@@ -55,6 +56,7 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
                 MoveInstanceMethodHandler.suggestParameterNames(method, target)
             }
         }
+        var usageFacts: NativeUsageFacts? = null
         val prepared = withContext(Dispatchers.EDT) {
             val method = requireCurrentMethod(project, preparation)
             val target = requireCurrentTarget(project, preparation)
@@ -64,29 +66,30 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
                 HeadlessMoveInstanceMethodProcessor(
                     project, method, target, nativeVisibility(preparation.newVisibility),
                     suggestedParameterNames,
-                ),
+                ) { usages ->
+                    // Captured from the framework's preprocessUsages call, pre-mutation.
+                    usageFacts = NativeUsageFacts(
+                        usages.count { it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression },
+                        projectRelativeAffectedFiles(project, usages, target, preparation),
+                        affectedVirtualFiles(method, target, usages),
+                    )
+                },
             )
-        }
-        val usageFacts = withContext(Dispatchers.Default) {
-            ReadAction.computeBlocking<NativeUsageFacts, RuntimeException> {
-                val usages = prepared.processor.findUsagesNative()
-                NativeUsageFacts(
-                    usages.count { it is MethodCallUsageInfo && it.methodCallExpression is PsiMethodCallExpression },
-                    projectRelativeAffectedFiles(project, usages, prepared.target, preparation),
-                    affectedVirtualFiles(prepared.method, prepared.target, usages),
-                )
-            }
         }
         return withContext(Dispatchers.EDT) {
             requireCurrentMethod(project, preparation)
             requireCurrentTarget(project, preparation)
             prepared.processor.setPreviewUsages(false)
             prepared.processor.run()
-            documentPersistence.persist(project, usageFacts.filesToPersist)
+            // Facts come from the framework's preprocessUsages hand-off (pre-mutation), not from
+            // invoking the @OverrideOnly findUsages() ourselves.
+            val facts = usageFacts
+                ?: throw MoveInstanceMethodPreparationException("The native refactoring did not report its usages.")
+            documentPersistence.persist(project, facts.filesToPersist)
             MoveInstanceMethodExecutionResult(
                 preparation.methodName, preparation.targetDescription, preparation.targetClassQualifiedName,
-                preparation.newVisibility, usageFacts.updatedCallSiteCount, usageFacts.affectedFiles,
-                "Moved ${preparation.methodName} to ${preparation.targetClassQualifiedName} and updated ${usageFacts.updatedCallSiteCount} call sites.",
+                preparation.newVisibility, facts.updatedCallSiteCount, facts.affectedFiles,
+                "Moved ${preparation.methodName} to ${preparation.targetClassQualifiedName} and updated ${facts.updatedCallSiteCount} call sites.",
             )
         }
     }
@@ -212,6 +215,7 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
         targetVariable: PsiVariable,
         newVisibility: String,
         oldClassParameterNames: Map<PsiClass, String>,
+        private val usageFactsSink: (Array<UsageInfo>) -> Unit,
     ) : MoveInstanceMethodProcessor(
         project,
         method,
@@ -232,7 +236,9 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
             )
         }
 
-        /** Exposes the processor's protected native usage search for pre-run fact capture. */
-        fun findUsagesNative(): Array<UsageInfo> = findUsages()
+        override fun preprocessUsages(usages: Ref<Array<UsageInfo>>): Boolean {
+            usageFactsSink(usages.get())
+            return super.preprocessUsages(usages)
+        }
     }
 }
