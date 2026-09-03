@@ -51,21 +51,12 @@ class IntellijIntroduceMemberExecutor internal constructor(
         }
         val actualName = JavaCodeStyleManager.getInstance(project)
             .suggestUniqueVariableName(preferredName, selection.targetClass, true)
-        val settings = BaseExpressionToFieldHandler.Settings(
-            actualName,
-            selection.expression,
-            arrayOf(selection.expression),
-            false,
-            profile is IntroduceMemberProfile.Constant,
-            true,
-            BaseExpressionToFieldHandler.InitializationPlace.IN_FIELD_DECLARATION,
-            PsiModifier.PRIVATE,
-            null,
-            selection.memberType,
-            false,
-            BaseExpressionToFieldHandler.TargetDestination(selection.targetClass),
-            false,
-            false,
+        val settings = HeadlessIntroduceMemberSettings.build(
+            fieldName = actualName,
+            selectedExpression = selection.expression,
+            declareStatic = profile is IntroduceMemberProfile.Constant,
+            forcedType = selection.memberType,
+            targetClass = selection.targetClass,
         )
 
         writeAction {
@@ -95,7 +86,6 @@ class IntellijIntroduceMemberExecutor internal constructor(
                                 editor,
                                 selection.expression,
                                 settings,
-                                selection.targetClass,
                                 profile,
                             )
                         },
@@ -134,13 +124,11 @@ class IntellijIntroduceMemberExecutor internal constructor(
         editor: Editor,
         expression: PsiExpression,
         settings: BaseExpressionToFieldHandler.Settings,
-        targetClass: PsiClass,
         profile: IntroduceMemberProfile,
     ) {
-        val executionParentClass = generateSequence(targetClass) { it.containingClass }.last()
         when (profile) {
             IntroduceMemberProfile.Constant -> try {
-                FixedIntroduceConstantHandler(settings, executionParentClass)
+                FixedIntroduceConstantHandler(settings)
                     .invoke(project, editor, expression)
             } catch (e: CommonRefactoringUtil.RefactoringErrorHintException) {
                 throw preparationFrom(e, profile)
@@ -148,7 +136,7 @@ class IntellijIntroduceMemberExecutor internal constructor(
 
             IntroduceMemberProfile.InstanceFinalField -> {
                 val accepted = try {
-                    FixedIntroduceFieldHandler(settings, executionParentClass)
+                    FixedIntroduceFieldHandler(settings)
                         .run(project, editor, expression)
                 } catch (e: CommonRefactoringUtil.RefactoringErrorHintException) {
                     throw preparationFrom(e, profile)
@@ -250,14 +238,14 @@ private object DefaultIntroduceMemberResultInspector : IntroduceMemberResultInsp
 /**
  * Private adapters that move the proven headless dialog-override behavior into production. The
  * fixed [BaseExpressionToFieldHandler.Settings] are built once by the executor and returned from
- * [showRefactoringDialog]; no dialog, chooser, preview, or template is ever opened.
+ * [showRefactoringDialog]; no dialog, chooser, preview, or template is ever opened. Target-class
+ * resolution is left to the platform's native flow: it resolves to the expression's enclosing
+ * class on both supported builds, and [BaseExpressionToFieldHandler.Settings]'s
+ * `TargetDestination` pins the actual member placement.
  */
 private class FixedIntroduceConstantHandler(
     private val fixedSettings: BaseExpressionToFieldHandler.Settings,
-    private val executionParentClass: PsiClass,
 ) : IntroduceConstantHandler() {
-
-    override fun getParentClass(expression: PsiExpression): PsiClass = executionParentClass
 
     override fun showRefactoringDialog(
         project: Project,
@@ -273,10 +261,7 @@ private class FixedIntroduceConstantHandler(
 
 private class FixedIntroduceFieldHandler(
     private val fixedSettings: BaseExpressionToFieldHandler.Settings,
-    private val executionParentClass: PsiClass,
 ) : IntroduceFieldHandler() {
-
-    override fun getParentClass(expression: PsiExpression): PsiClass = executionParentClass
 
     fun run(project: Project, editor: Editor, expression: PsiExpression): Boolean =
         invokeImpl(project, expression, editor)
