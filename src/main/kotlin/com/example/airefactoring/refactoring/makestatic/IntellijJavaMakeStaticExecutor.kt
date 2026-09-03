@@ -2,6 +2,7 @@ package com.example.airefactoring.refactoring.makestatic
 
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
@@ -42,6 +43,27 @@ class IntellijJavaMakeStaticExecutor internal constructor(
 ) : JavaMakeStaticExecutor {
 
     override suspend fun makeStatic(
+        project: Project,
+        preparation: JavaMakeStaticPreparation,
+    ): JavaMakeStaticExecutionResult {
+        // Drain pending external VFS refreshes for the target file while documents are still
+        // clean: a refresh landing after the processor dirties a document would raise the modal
+        // memory-disk conflict dialog and wedge the unattended IDE (same hardening as the
+        // Extract Delegate and Replace Inheritance executors).
+        withContext(Dispatchers.Default) {
+            project.basePath?.let { basePath ->
+                LocalFileSystem.getInstance().refreshIoFiles(
+                    listOf(java.io.File(basePath, preparation.pathInProject)),
+                    /* async: */ false,
+                    /* recursive: */ false,
+                    null,
+                )
+            }
+        }
+        return makeStaticOnEdt(project, preparation)
+    }
+
+    private suspend fun makeStaticOnEdt(
         project: Project,
         preparation: JavaMakeStaticPreparation,
     ): JavaMakeStaticExecutionResult = withContext(Dispatchers.EDT) {

@@ -6,6 +6,7 @@ import com.intellij.openapi.application.constrainedReadAndWriteAction
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.psi.PsiElement
@@ -18,6 +19,8 @@ import com.intellij.refactoring.IntroduceVariableUtil
 import com.intellij.refactoring.introduceVariable.IntroduceVariableSettings
 import com.intellij.refactoring.introduceVariable.VariableExtractor
 import com.intellij.util.CommonJavaRefactoringUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Executes IntelliJ's native Java Introduce Variable refactoring with every UI choice fixed. */
 class IntellijIntroduceVariableExecutor internal constructor(
@@ -26,6 +29,28 @@ class IntellijIntroduceVariableExecutor internal constructor(
 ) : IntroduceVariableExecutor {
 
     override suspend fun introduce(
+        project: Project,
+        selection: IntroduceVariableSelection,
+        preferredVariableName: String,
+    ): IntroduceVariableExecutionResult {
+        // Drain pending external VFS refreshes for the target file while documents are still
+        // clean: a refresh landing after the processor dirties a document would raise the modal
+        // memory-disk conflict dialog and wedge the unattended IDE (same hardening as the
+        // Extract Delegate and Replace Inheritance executors).
+        withContext(Dispatchers.Default) {
+            selection.file.virtualFile?.let { virtualFile ->
+                LocalFileSystem.getInstance().refreshIoFiles(
+                    listOf(java.io.File(virtualFile.path)),
+                    /* async: */ false,
+                    /* recursive: */ false,
+                    null,
+                )
+            }
+        }
+        return introduceInSmartMode(project, selection, preferredVariableName)
+    }
+
+    private suspend fun introduceInSmartMode(
         project: Project,
         selection: IntroduceVariableSelection,
         preferredVariableName: String,
