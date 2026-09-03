@@ -1,7 +1,6 @@
 package com.example.airefactoring.refactoring.makestatic
 
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
@@ -45,64 +44,49 @@ class IntellijJavaMakeStaticExecutor internal constructor(
     override suspend fun makeStatic(
         project: Project,
         preparation: JavaMakeStaticPreparation,
-    ): JavaMakeStaticExecutionResult {
-        val prepared = withContext(Dispatchers.EDT) {
-            val member = requireCurrentMember(preparation)
-            val memberOwner = requireCurrentMemberOwner(preparation, member)
-            val fields = requireCurrentFields(preparation, memberOwner)
-            val settings = buildSettings(preparation, fields)
-            PreparedNativeExecution(
-                member,
-                when (preparation.memberKind) {
-                    JavaMakeStaticMemberKind.METHOD -> HeadlessMakeMethodStaticProcessor(
-                        project,
-                        member as PsiMethod,
-                        settings,
-                    )
-                    JavaMakeStaticMemberKind.CLASS -> HeadlessMakeClassStaticProcessor(
-                        project,
-                        member as PsiClass,
-                        settings,
-                    )
-                },
+    ): JavaMakeStaticExecutionResult = withContext(Dispatchers.EDT) {
+        val member = requireCurrentMember(preparation)
+        val memberOwner = requireCurrentMemberOwner(preparation, member)
+        val fields = requireCurrentFields(preparation, memberOwner)
+        val settings = buildSettings(preparation, fields)
+        val processor: HeadlessJavaMakeStaticProcessor = when (preparation.memberKind) {
+            JavaMakeStaticMemberKind.METHOD -> HeadlessMakeMethodStaticProcessor(
+                project,
+                member as PsiMethod,
+                settings,
+            )
+            JavaMakeStaticMemberKind.CLASS -> HeadlessMakeClassStaticProcessor(
+                project,
+                member as PsiClass,
+                settings,
             )
         }
-        val usageFacts = withContext(Dispatchers.Default) {
-            ReadAction.computeBlocking<NativeUsageFacts, RuntimeException> {
-                val usages = prepared.processor.findUsagesNative()
-                NativeUsageFacts(
-                    nativeUsageCount = usages.size,
-                    affectedFiles = projectRelativeAffectedFiles(project, usages, preparation),
-                    filesToPersist = affectedVirtualFiles(prepared.member, usages),
-                )
-            }
-        }
-
-        return withContext(Dispatchers.EDT) {
-            requireCurrentFields(preparation, requireCurrentMemberOwner(preparation, requireCurrentMember(preparation)))
-            prepared.processor.setPreviewUsages(false)
-            try {
-                prepared.processor.run()
-            } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
-                throw JavaMakeStaticConflictException(
-                    e.getMessages().distinct().joinToString(separator = "; "),
-                )
-            }
-            documentPersistence.persist(project, usageFacts.filesToPersist)
-
-            JavaMakeStaticExecutionResult(
-                memberName = preparation.memberName,
-                memberKind = preparation.memberKind,
-                replaceUsages = preparation.replaceUsages,
-                classParameterName = preparation.classParameterName,
-                fieldParameterNames = preparation.fieldParameterNames,
-                generateDelegate = preparation.generateDelegate,
-                nativeUsageCount = usageFacts.nativeUsageCount,
-                affectedFiles = usageFacts.affectedFiles,
-                summary = "Made ${preparation.memberKind.name.lowercase()} " +
-                    "'${preparation.memberName}' static and updated ${usageFacts.nativeUsageCount} native usages.",
+        processor.setPreviewUsages(false)
+        try {
+            processor.run()
+        } catch (e: BaseRefactoringProcessor.ConflictsInTestsException) {
+            throw JavaMakeStaticConflictException(
+                e.getMessages().distinct().joinToString(separator = "; "),
             )
         }
+
+        val usages = processor.capturedUsages
+        val filesToPersist = affectedVirtualFiles(member, usages)
+        documentPersistence.persist(project, filesToPersist)
+
+        val affectedFiles = projectRelativeAffectedFiles(project, usages, preparation)
+        JavaMakeStaticExecutionResult(
+            memberName = preparation.memberName,
+            memberKind = preparation.memberKind,
+            replaceUsages = preparation.replaceUsages,
+            classParameterName = preparation.classParameterName,
+            fieldParameterNames = preparation.fieldParameterNames,
+            generateDelegate = preparation.generateDelegate,
+            nativeUsageCount = usages.size,
+            affectedFiles = affectedFiles,
+            summary = "Made ${preparation.memberKind.name.lowercase()} " +
+                "'${preparation.memberName}' static and updated ${usages.size} native usages.",
+        )
     }
 
     /**
@@ -248,17 +232,6 @@ class IntellijJavaMakeStaticExecutor internal constructor(
             usages.mapNotNullTo(this) { it.element?.containingFile?.virtualFile }
         }
 
-    private data class PreparedNativeExecution(
-        val member: PsiTypeParameterListOwner,
-        val processor: HeadlessJavaMakeStaticProcessor,
-    )
-
-    private data class NativeUsageFacts(
-        val nativeUsageCount: Int,
-        val affectedFiles: List<String>?,
-        val filesToPersist: Set<VirtualFile>,
-    )
-
     /** Maps one absolute file path to a project-relative path, or null when it is not inside the project. */
     private fun relativeProjectPath(base: Path, absolutePath: String): String? {
         val absolute = Path.of(absolutePath).toAbsolutePath().normalize()
@@ -268,14 +241,17 @@ class IntellijJavaMakeStaticExecutor internal constructor(
 
     /**
      * A headless [MakeMethodStaticProcessor] subclass that replaces the base conflict UI presentation
-     * ([showConflicts]) with [JavaMakeStaticConflictException] and exposes the protected native usage
-     * search for pre-run fact capture.
+     * ([showConflicts]) with [JavaMakeStaticConflictException] and captures the native usages in
+     * [performRefactoring].
      */
     private class HeadlessMakeMethodStaticProcessor(
         project: Project,
         method: PsiMethod,
         settings: Settings,
     ) : MakeMethodStaticProcessor(project, method, settings), HeadlessJavaMakeStaticProcessor {
+        override var capturedUsages: Array<UsageInfo> = emptyArray()
+            private set
+
         override fun showConflicts(
             conflicts: MultiMap<PsiElement, String>,
             usages: Array<out UsageInfo>?,
@@ -288,19 +264,26 @@ class IntellijJavaMakeStaticExecutor internal constructor(
             )
         }
 
-        override fun findUsagesNative(): Array<UsageInfo> = findUsages()
+        override fun performRefactoring(usages: Array<out UsageInfo>) {
+            @Suppress("UNCHECKED_CAST")
+            capturedUsages = usages as Array<UsageInfo>
+            super.performRefactoring(usages)
+        }
     }
 
     /**
      * A headless [MakeClassStaticProcessor] subclass that replaces the base conflict UI presentation
-     * ([showConflicts]) with [JavaMakeStaticConflictException] and exposes the protected native usage
-     * search for pre-run fact capture.
+     * ([showConflicts]) with [JavaMakeStaticConflictException] and captures the native usages in
+     * [performRefactoring].
      */
     private class HeadlessMakeClassStaticProcessor(
         project: Project,
         clazz: PsiClass,
         settings: Settings,
     ) : MakeClassStaticProcessor(project, clazz, settings), HeadlessJavaMakeStaticProcessor {
+        override var capturedUsages: Array<UsageInfo> = emptyArray()
+            private set
+
         override fun showConflicts(
             conflicts: MultiMap<PsiElement, String>,
             usages: Array<out UsageInfo>?,
@@ -313,15 +296,19 @@ class IntellijJavaMakeStaticExecutor internal constructor(
             )
         }
 
-        override fun findUsagesNative(): Array<UsageInfo> = findUsages()
+        override fun performRefactoring(usages: Array<out UsageInfo>) {
+            @Suppress("UNCHECKED_CAST")
+            capturedUsages = usages as Array<UsageInfo>
+            super.performRefactoring(usages)
+        }
     }
 
     /**
-     * The headless surface both native Make Static subclasses expose to the executor: the protected
-     * usage search plus the public run/preview controls inherited from [BaseRefactoringProcessor].
+     * The headless surface both native Make Static subclasses expose to the executor: the captured
+     * usages plus the public run/preview controls inherited from [BaseRefactoringProcessor].
      */
     private interface HeadlessJavaMakeStaticProcessor {
-        fun findUsagesNative(): Array<UsageInfo>
+        val capturedUsages: Array<UsageInfo>
         fun setPreviewUsages(preview: Boolean)
         fun run()
     }

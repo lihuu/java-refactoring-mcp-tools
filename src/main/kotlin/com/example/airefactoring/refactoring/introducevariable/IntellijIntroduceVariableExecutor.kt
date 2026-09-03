@@ -13,9 +13,11 @@ import com.intellij.psi.PsiExpression
 import com.intellij.psi.PsiType
 import com.intellij.psi.PsiVariable
 import com.intellij.psi.codeStyle.JavaCodeStyleManager
-import com.intellij.refactoring.introduceVariable.IntroduceVariableBase
+import com.intellij.psi.PsiTypes
+import com.intellij.refactoring.IntroduceVariableUtil
 import com.intellij.refactoring.introduceVariable.IntroduceVariableSettings
 import com.intellij.refactoring.introduceVariable.VariableExtractor
+import com.intellij.util.CommonJavaRefactoringUtil
 
 /** Executes IntelliJ's native Java Introduce Variable refactoring with every UI choice fixed. */
 class IntellijIntroduceVariableExecutor internal constructor(
@@ -35,26 +37,21 @@ class IntellijIntroduceVariableExecutor internal constructor(
                 "The selected expression changed before Introduce Variable could run.",
             )
         }
-        val context = when (
-            val result = IntroduceVariableBase.getIntroduceVariableContext(
-                project,
-                selection.expression,
-                null,
-            )
-        ) {
-            is IntroduceVariableBase.IntroduceVariableResult.Error -> {
-                throw IntroduceVariablePreparationException(
-                    result.message?.takeIf { it.isNotBlank() }
-                        ?: "Native Introduce Variable refused the expression.",
-                )
-            }
-            is IntroduceVariableBase.IntroduceVariableResult.Context -> result
+        val errorMessage = IntroduceVariableUtil.getErrorMessage(selection.expression)
+        if (errorMessage != null) {
+            throw IntroduceVariablePreparationException(errorMessage)
         }
-        val expression = context.expression()
-        val selectedType = context.originalType()
+        val expression = selection.expression
+        val selectedType = expression.type
+            ?: throw IntroduceVariablePreparationException("Cannot infer expression type.")
+        if (selectedType == PsiTypes.voidType()) {
+            throw IntroduceVariablePreparationException("Selected expression has void type.")
+        }
+        val anchor = CommonJavaRefactoringUtil.getParentStatement(expression, false)
+            ?: throw IntroduceVariablePreparationException("No parent statement found for the selected expression.")
         val preparation = IntroduceVariablePreparation(
             expression = expression,
-            anchor = context.anchorStatement(),
+            anchor = anchor,
             selectedType = selectedType,
             variableType = selectedType.canonicalText,
             actualName = JavaCodeStyleManager.getInstance(project)

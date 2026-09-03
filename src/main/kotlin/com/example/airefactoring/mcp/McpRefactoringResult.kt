@@ -225,32 +225,6 @@ data class McpRefactoringResult private constructor(
             summary = summary,
         )
 
-        fun introduceParameterSuccess(
-            projectBasePath: String,
-            filePath: String,
-            methodName: String,
-            parameterName: String,
-            parameterType: String,
-            parameterPosition: Int,
-            sourceKind: String,
-            updatedCallSiteCount: Int,
-            affectedFiles: List<String>,
-            summary: String,
-        ) = McpRefactoringResult(
-            ok = true,
-            operation = "java_introduce_parameter",
-            projectBasePath = projectBasePath,
-            filePath = filePath,
-            methodName = methodName,
-            parameterName = parameterName,
-            parameterType = parameterType,
-            parameterPosition = parameterPosition,
-            sourceKind = sourceKind,
-            updatedCallSiteCount = updatedCallSiteCount,
-            affectedFiles = affectedFiles,
-            summary = summary,
-        )
-
         fun safeDeleteSuccess(
             projectBasePath: String,
             filePath: String,
