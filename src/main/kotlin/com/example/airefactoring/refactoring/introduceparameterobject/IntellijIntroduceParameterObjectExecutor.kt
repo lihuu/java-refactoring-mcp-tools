@@ -2,8 +2,8 @@ package com.example.airefactoring.refactoring.introduceparameterobject
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiMethod
@@ -52,7 +52,7 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
         // the native processor's run() stays on EDT where it manages its own write/progress.
         val processor: com.intellij.refactoring.introduceParameterObject.IntroduceParameterObjectProcessor<*, *, *> =
             withContext(Dispatchers.Default) {
-                ReadAction.compute<com.intellij.refactoring.introduceParameterObject.IntroduceParameterObjectProcessor<*, *, *>, RuntimeException> {
+                readAction {
                     val allParams = method.parameterList.parameters
                     val paramInfos = selectedParams.map { param ->
                         val index = allParams.indexOf(param)
@@ -110,7 +110,7 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
 
         // Find PsiClass for created/reused object to add its file — slow operation, run off-EDT
         val objectClass = withContext(Dispatchers.Default) {
-            ReadAction.compute<com.intellij.psi.PsiClass?, RuntimeException> {
+            readAction {
                 JavaPsiFacade.getInstance(project).findClass(createdFqn, GlobalSearchScope.allScope(project))
             }
         }
@@ -314,7 +314,7 @@ class IntellijIntroduceParameterObjectExecutor internal constructor(
     ) {
         // Re-search current references and compare file inventory to snapshot
         val currentAffected = withContext(Dispatchers.Default) {
-            ReadAction.compute<Set<com.intellij.openapi.vfs.VirtualFile>, RuntimeException> {
+            readAction {
                 val files = mutableSetOf<com.intellij.openapi.vfs.VirtualFile>()
                 method.containingFile?.virtualFile?.let { files.add(it) }
                 preparation.existingClassPointer?.element?.containingFile?.virtualFile?.let { files.add(it) }

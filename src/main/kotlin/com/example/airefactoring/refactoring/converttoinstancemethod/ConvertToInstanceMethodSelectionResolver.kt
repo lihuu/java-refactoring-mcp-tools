@@ -17,7 +17,6 @@ import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.search.searches.ClassInheritorsSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtil
-import com.intellij.psi.PsiImplicitClass
 import java.nio.file.Path
 
 class ConvertToInstanceMethodSelectionResolver(
@@ -167,7 +166,9 @@ class ConvertToInstanceMethodSelectionResolver(
                         "The containing class must not be an inner class.",
                     )
                 }
-                if (containing is PsiImplicitClass || containing.name == null) {
+                // Implicit classes have a null name, so the name check alone rejects them; the
+                // dedicated PsiImplicitClass experimental type is deliberately not referenced.
+                if (containing.name == null) {
                     return failure(
                         McpRefactoringErrorCode.UNSUPPORTED_TARGET,
                         "The containing class must not be an implicit class.",

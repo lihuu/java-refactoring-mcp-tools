@@ -2,9 +2,9 @@ package com.example.airefactoring.refactoring.replaceinheritance
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
@@ -50,7 +50,7 @@ class IntellijReplaceInheritanceExecutor internal constructor(
         }
 
         val baseClass = withContext(Dispatchers.Default) {
-            ReadAction.compute<PsiClass, RuntimeException> {
+            readAction {
                 com.intellij.psi.JavaPsiFacade.getInstance(project).findClass(
                     preparation.targetBaseClassFqn,
                     com.intellij.psi.search.GlobalSearchScope.projectScope(project)

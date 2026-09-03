@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.extractinterface
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -32,14 +33,14 @@ class IntellijExtractInterfaceExecutor internal constructor(
     ): ExtractInterfaceExecutionResult {
         val sourceClass = withContext(Dispatchers.EDT) { requireCurrentSourceClass(preparation) }
         val members = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiMember>, RuntimeException> {
+            readAction {
                 requireCurrentMembers(preparation, sourceClass)
             }
         }
 
         // Build memberInfos (reads only) off EDT to avoid SlowOperations
         val memberInfos = withContext(Dispatchers.Default) {
-            ReadAction.compute<Array<MemberInfo>, RuntimeException> {
+            readAction {
                 members.map { member ->
                     MemberInfo(member).apply {
                         isChecked = true
@@ -71,19 +72,19 @@ class IntellijExtractInterfaceExecutor internal constructor(
 
             // Conflict checks before mutation (needs read)
             val qualified = preparation.effectiveQualifiedNameSnapshot
-            val existingClass = ReadAction.compute<PsiClass?, RuntimeException> {
+            val existingClass = readAction {
                 JavaPsiFacade.getInstance(project).findClass(qualified, GlobalSearchScope.allScope(project))
             }
             if (existingClass != null) {
                 throw ExtractInterfaceConflictException("Interface '$qualified' already exists.")
             }
-            val canCreate = ReadAction.compute<String?, RuntimeException> {
+            val canCreate = readAction {
                 com.intellij.refactoring.util.RefactoringMessageUtil.checkCanCreateClass(targetDirectory, preparation.interfaceName)
             }
             if (canCreate != null) {
                 throw ExtractInterfaceConflictException(canCreate)
             }
-            val existingFile = ReadAction.compute<PsiJavaFile?, RuntimeException> {
+            val existingFile = readAction {
                 targetDirectory.findFile(preparation.interfaceName + ".java") as? PsiJavaFile
             }
             if (existingFile != null) {
@@ -107,13 +108,13 @@ class IntellijExtractInterfaceExecutor internal constructor(
             }
 
             // After mutation, find new interface file (read)
-            val newInterface = ReadAction.compute<PsiClass?, RuntimeException> {
+            val newInterface = readAction {
                 JavaPsiFacade.getInstance(project).findClass(qualified, GlobalSearchScope.allScope(project))
             } ?: throw IllegalStateException("New interface '$qualified' not found after extraction.")
-            val newFile = ReadAction.compute<VirtualFile?, RuntimeException> { newInterface.containingFile?.virtualFile }
+            val newFile = readAction { newInterface.containingFile?.virtualFile }
                 ?: throw IllegalStateException("New interface file not found.")
 
-            val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceClass.containingFile?.virtualFile }
+            val sourceFile = readAction { sourceClass.containingFile?.virtualFile }
                 ?: throw IllegalStateException("Source file not found.")
 
             val filesToPersist = setOf(sourceFile, newFile)

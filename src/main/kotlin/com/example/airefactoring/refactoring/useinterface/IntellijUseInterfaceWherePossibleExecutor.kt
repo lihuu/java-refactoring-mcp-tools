@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.useinterface
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
 import com.intellij.psi.PsiElement
@@ -57,7 +58,7 @@ class IntellijUseInterfaceWherePossibleExecutor internal constructor(
             }
             processor.setPreviewUsages(false)
             processor.run()
-            val sourceFile = ReadAction.compute<com.intellij.openapi.vfs.VirtualFile?, RuntimeException> {
+            val sourceFile = readAction {
                 source.containingFile?.virtualFile
             } ?: throw IllegalStateException("Source file not found")
             val filesToPersist = usageFacts.files + sourceFile

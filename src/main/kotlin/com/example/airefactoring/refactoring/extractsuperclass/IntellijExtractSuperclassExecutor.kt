@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.extractsuperclass
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -32,13 +33,13 @@ class IntellijExtractSuperclassExecutor internal constructor(
     ): ExtractSuperclassExecutionResult {
         val sourceClass = withContext(Dispatchers.EDT) { requireCurrentSourceClass(preparation) }
         val members = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiMember>, RuntimeException> {
+            readAction {
                 requireCurrentMembers(preparation, sourceClass)
             }
         }
 
         val memberInfos = withContext(Dispatchers.Default) {
-            ReadAction.compute<Array<MemberInfo>, RuntimeException> {
+            readAction {
                 members.map { member ->
                     MemberInfo(member).apply {
                         isChecked = true
@@ -66,7 +67,7 @@ class IntellijExtractSuperclassExecutor internal constructor(
             val targetDirectory = resolveTargetDirectory(project, sourceClass, preparation.targetPackage)
 
             val qualified = preparation.effectiveQualifiedNameSnapshot
-            val existingClass = ReadAction.compute<PsiClass?, RuntimeException> {
+            val existingClass = readAction {
                 JavaPsiFacade.getInstance(project).findClass(qualified, GlobalSearchScope.allScope(project))
             }
             if (existingClass != null) {
@@ -76,13 +77,13 @@ class IntellijExtractSuperclassExecutor internal constructor(
                         "java_extract_interface instead.",
                 )
             }
-            val canCreate = ReadAction.compute<String?, RuntimeException> {
+            val canCreate = readAction {
                 com.intellij.refactoring.util.RefactoringMessageUtil.checkCanCreateClass(targetDirectory, preparation.superclassName)
             }
             if (canCreate != null) {
                 throw ExtractSuperclassConflictException(canCreate)
             }
-            val existingFile = ReadAction.compute<PsiJavaFile?, RuntimeException> {
+            val existingFile = readAction {
                 targetDirectory.findFile(preparation.superclassName + ".java") as? PsiJavaFile
             }
             if (existingFile != null) {
@@ -94,13 +95,13 @@ class IntellijExtractSuperclassExecutor internal constructor(
                 ExtractSuperClassUtil.extractSuperClass(project, targetDirectory, preparation.superclassName, sourceClass, memberInfos, docPolicy)
             }
 
-            val newSuper = ReadAction.compute<PsiClass?, RuntimeException> {
+            val newSuper = readAction {
                 JavaPsiFacade.getInstance(project).findClass(qualified, GlobalSearchScope.allScope(project))
             } ?: throw IllegalStateException("New superclass '$qualified' not found after extraction.")
-            val newFile = ReadAction.compute<VirtualFile?, RuntimeException> { newSuper.containingFile?.virtualFile }
+            val newFile = readAction { newSuper.containingFile?.virtualFile }
                 ?: throw IllegalStateException("New superclass file not found.")
 
-            val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceClass.containingFile?.virtualFile }
+            val sourceFile = readAction { sourceClass.containingFile?.virtualFile }
                 ?: throw IllegalStateException("Source file not found.")
 
             val filesToPersist = setOf(sourceFile, newFile)

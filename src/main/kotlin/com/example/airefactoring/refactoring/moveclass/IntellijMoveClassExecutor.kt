@@ -2,9 +2,9 @@ package com.example.airefactoring.refactoring.moveclass
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
 import com.intellij.refactoring.JavaRefactoringFactory
@@ -33,7 +33,7 @@ class IntellijMoveClassExecutor internal constructor(
         // MoveDestination creation and processor construction touch the file system / indexes,
         // which are slow operations; run them off-EDT in a read action. The native mutation stays on EDT.
         val processor: MoveClassesOrPackagesProcessor = withContext(Dispatchers.Default) {
-            ReadAction.compute<MoveClassesOrPackagesProcessor, RuntimeException> {
+            readAction {
                 val moveDest = JavaRefactoringFactory.getInstance(project)
                     .createSourceFolderPreservingMoveDestination(preparation.targetPackage)
                 MoveClassesOrPackagesProcessor(

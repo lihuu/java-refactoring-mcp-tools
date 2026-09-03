@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.pullup
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -31,10 +32,10 @@ class IntellijPullMembersUpExecutor internal constructor(
         val sourceSub = withContext(Dispatchers.EDT) { requireCurrentSource(preparation) }
         val targetSuper = withContext(Dispatchers.EDT) { requireCurrentTarget(preparation) }
         val members = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiMember>, RuntimeException> { requireCurrentMembers(preparation, sourceSub) }
+            readAction { requireCurrentMembers(preparation, sourceSub) }
         }
         val memberInfos = withContext(Dispatchers.Default) {
-            ReadAction.compute<Array<MemberInfo>, RuntimeException> {
+            readAction {
                 members.map { m -> MemberInfo(m).apply { isChecked = true; if (m is com.intellij.psi.PsiMethod) isToAbstract = true } }.toTypedArray()
             }
         }
@@ -57,8 +58,8 @@ class IntellijPullMembersUpExecutor internal constructor(
             }
             processor.setPreviewUsages(false)
             processor.run()
-            val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceSub.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
-            val targetFile = ReadAction.compute<VirtualFile?, RuntimeException> { targetSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Target file not found")
+            val sourceFile = readAction { sourceSub.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
+            val targetFile = readAction { targetSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Target file not found")
             val filesToPersist = setOf(sourceFile, targetFile)
             documentPersistence.persist(project, filesToPersist)
             val affected = projectRelativeAffectedFiles(project, sourceFile, targetFile)

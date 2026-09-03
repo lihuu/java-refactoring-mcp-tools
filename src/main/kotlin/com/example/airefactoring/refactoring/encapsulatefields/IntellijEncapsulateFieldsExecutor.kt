@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.encapsulatefields
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
@@ -34,7 +35,7 @@ class IntellijEncapsulateFieldsExecutor internal constructor(
         val fields = withContext(Dispatchers.EDT) { requireCurrentFields(preparation) }
         val containingClass = withContext(Dispatchers.EDT) { requireCurrentContainingClass(preparation, fields) }
         val descriptors = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<FieldDescriptor>, RuntimeException> {
+            readAction {
                 buildFieldDescriptors(fields, preparation)
             }
         }

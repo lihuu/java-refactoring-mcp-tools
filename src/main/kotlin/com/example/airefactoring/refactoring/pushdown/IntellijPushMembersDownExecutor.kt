@@ -2,8 +2,9 @@ package com.example.airefactoring.refactoring.pushdown
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -31,10 +32,10 @@ class IntellijPushMembersDownExecutor internal constructor(
         val sourceSuper = withContext(Dispatchers.EDT) { requireCurrentSource(preparation) }
         val targetSubs = withContext(Dispatchers.EDT) { requireCurrentTargets(preparation) }
         val members = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiMember>, RuntimeException> { requireCurrentMembers(preparation, sourceSuper) }
+            readAction { requireCurrentMembers(preparation, sourceSuper) }
         }
         val memberInfos = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<MemberInfo>, RuntimeException> {
+            readAction {
                 members.map { m -> MemberInfo(m).apply { isChecked = true; if (m is com.intellij.psi.PsiMethod) isToAbstract = true } }
             }
         }
@@ -62,8 +63,8 @@ class IntellijPushMembersDownExecutor internal constructor(
             }
             processor.setPreviewUsages(false)
             processor.run()
-            val sourceFile = ReadAction.compute<VirtualFile?, RuntimeException> { sourceSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
-            val targetFiles = targetSubs.mapNotNull { ReadAction.compute<VirtualFile?, RuntimeException> { it.containingFile?.virtualFile } }
+            val sourceFile = readAction { sourceSuper.containingFile?.virtualFile } ?: throw IllegalStateException("Source file not found")
+            val targetFiles = targetSubs.mapNotNull { readAction { it.containingFile?.virtualFile } }
             val filesToPersist = (listOf(sourceFile) + targetFiles).toSet()
             documentPersistence.persist(project, filesToPersist)
             val affected = projectRelativeAffectedFiles(project, sourceFile, targetFiles)

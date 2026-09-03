@@ -1,7 +1,8 @@
 package com.example.airefactoring.refactoring.moveinstancemethod
 
-import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
@@ -48,7 +49,7 @@ class IntellijMoveInstanceMethodExecutor internal constructor(
         // suggestParameterNames walks stub indexes via JavaCodeStyleManager.suggestVariableName,
         // which trips SlowOperations assertions on EDT. Off-EDT read actions are exempt by design.
         val suggestedParameterNames = withContext(Dispatchers.Default) {
-            ReadAction.compute<Map<PsiClass, String>, RuntimeException> {
+            readAction {
                 val method = requireCurrentMethod(project, preparation)
                 val target = requireCurrentTarget(project, preparation)
                 MoveInstanceMethodHandler.suggestParameterNames(method, target)

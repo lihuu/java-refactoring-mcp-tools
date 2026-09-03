@@ -2,9 +2,9 @@ package com.example.airefactoring.refactoring.extractmethodobject
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiMethod
 import com.intellij.refactoring.extractMethod.PrepareFailedException
@@ -40,7 +40,7 @@ class IntellijExtractMethodObjectExecutor internal constructor(
         // Processor construction and prepare() touch file/stub indexes and resolve types, which are
         // slow operations; run them off-EDT in a read action. The native mutation itself stays on EDT.
         val prepared: PreparedNative = withContext(Dispatchers.Default) {
-            ReadAction.compute<PreparedNative, RuntimeException> {
+            readAction {
                 val processor = ExtractMethodObjectProcessor(
                     project,
                     null,

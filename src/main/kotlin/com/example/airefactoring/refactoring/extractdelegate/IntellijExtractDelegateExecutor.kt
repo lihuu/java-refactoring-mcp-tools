@@ -2,9 +2,9 @@ package com.example.airefactoring.refactoring.extractdelegate
 
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
@@ -54,7 +54,7 @@ class IntellijExtractDelegateExecutor internal constructor(
             )
         }
         val fields: List<PsiField> = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiField>, RuntimeException> {
+            readAction {
                 preparation.extractedFields.map { name ->
                     cls.findFieldByName(name, false)
                         ?: throw ExtractDelegatePreparationException(
@@ -64,7 +64,7 @@ class IntellijExtractDelegateExecutor internal constructor(
             }
         }
         val methods: List<PsiMethod> = withContext(Dispatchers.Default) {
-            ReadAction.compute<List<PsiMethod>, RuntimeException> {
+            readAction {
                 preparation.extractedMethods.flatMap { name ->
                     val candidates = cls.findMethodsByName(name, false)
                         .filter { !it.isConstructor && !it.hasModifierProperty(PsiModifier.ABSTRACT) }

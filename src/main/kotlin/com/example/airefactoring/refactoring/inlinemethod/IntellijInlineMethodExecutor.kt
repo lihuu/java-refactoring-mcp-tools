@@ -3,6 +3,7 @@ package com.example.airefactoring.refactoring.inlinemethod
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersistence
 import com.example.airefactoring.refactoring.NativeRefactoringDocumentPersister
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiMethodCallExpression
@@ -23,8 +24,15 @@ class IntellijInlineMethodExecutor internal constructor(
     override suspend fun inline(
         project: Project,
         preparation: InlineMethodPreparation,
-    ): InlineMethodExecutionResult = withContext(Dispatchers.EDT) {
-            val method = validateFreshPreparation(project, preparation)
+    ): InlineMethodExecutionResult {
+        // Freshness validation reads references and PSI on a background read action: on the EDT
+        // the ReferencesSearch would raise slow-operation assertions, and the
+        // SlowOperations.allowSlowOperations escape hatch it previously relied on is deprecated
+        // and scheduled for removal.
+        val method = withContext(Dispatchers.Default) {
+            readAction { validateFreshPreparation(project, preparation) }
+        }
+        return withContext(Dispatchers.EDT) {
             val usage = preparation.usagePointers.firstOrNull()?.element
                 ?.takeIf { it.isValid }
                 ?: throw stale()
@@ -42,6 +50,7 @@ class IntellijInlineMethodExecutor internal constructor(
                 affectedFiles = projectRelativePaths(project, preparation),
                 summary = "Inlined ${preparation.usagePointers.size} Java calls to '${preparation.methodName}' and removed its declaration.",
             )
+        }
     }
 
     internal fun validateFreshPreparation(project: Project, preparation: InlineMethodPreparation): PsiMethod {
@@ -54,8 +63,7 @@ class IntellijInlineMethodExecutor internal constructor(
             !preparation.sourceVirtualFile.isValid || !preparation.sourceVirtualFile.isWritable
         ) throw stale()
 
-        val current = com.intellij.util.SlowOperations.allowSlowOperations<List<InlineMethodUsageSnapshot>, Exception> {
-            ReferencesSearch.search(method, GlobalSearchScope.projectScope(project)).findAll()
+        val current = ReferencesSearch.search(method, GlobalSearchScope.projectScope(project)).findAll()
                 .map { reference ->
                     val expression = reference.element as? PsiReferenceExpression ?: throw stale()
                     if (expression is PsiMethodReferenceExpression || expression.resolve() !== method) throw stale()
@@ -66,7 +74,6 @@ class IntellijInlineMethodExecutor internal constructor(
                     InlineMethodUsageSnapshot(file.path, expression.textRange.startOffset)
                 }
                 .sortedWith(compareBy({ it.filePath }, { it.startOffset }))
-        }
         if (current != preparation.usageSnapshots) throw stale()
         val pointerSnapshots = preparation.usagePointers.map { pointer ->
             val expression = pointer.element?.takeIf { it.isValid } ?: throw stale()
