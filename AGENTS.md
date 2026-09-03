@@ -21,7 +21,9 @@ When a user asks to extract Java code into a method or split a complex Java meth
 
 ## Development
 
-- Target: IntelliJ IDEA 2026.1.3, build 261.
+- Target: IntelliJ IDEA 2026.1 (build 261) and 2026.2 (build 262); the compile SDK stays 2026.1.3
+  and 262 compatibility is verified with `-PplatformVersion=2026.2.1 test` plus a
+  `-PplatformVersion=2026.2.1 runE2eIde` acceptance run before release.
 - JDK: 21.
 - Tests: `./gradlew test`.
 - Distribution: `./gradlew buildPlugin`.

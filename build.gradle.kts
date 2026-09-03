@@ -22,9 +22,21 @@ repositories {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
+    // The IDE provides kotlin-stdlib at runtime; bundling a second copy risks classloader
+    // conflicts. Compile against it explicitly (gradle.properties sets
+    // kotlin.stdlib.default.dependency=false) and keep it out of the packaged runtime below.
+    compileOnly("org.jetbrains.kotlin:kotlin-stdlib:2.4.0")
+
     // IntelliJ Platform Gradle Plugin 2.x: platform + bundled plugins + test framework
     // are declared here as dependencies, not in a top-level `intellij {}` block.
     // IntelliJ IDEA 2025.3+ uses the unified IntelliJ IDEA distribution helper.
+    // NOTE: unit tests are only run against the platform resolved by gradle.properties
+    // (2026.1.3). Running them with -PplatformVersion=2026.2.1 is not possible with plugin
+    // 2.16: the 262 test sandbox cannot assemble the Java plugin's dependency closure after
+    // 2026.2 split it across nine bundled plugins (structureView, todo, testRunner, ...), so
+    // the Java plugin fails to load there. 2026.2 compatibility is validated instead by
+    // verifyPlugin against 2026.2.1 (ides block below) plus a real-IDE 2026.2 E2E run, which
+    // both use the complete distribution.
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion").get())
         bundledPlugin("com.intellij.java")
@@ -37,6 +49,12 @@ dependencies {
 
     // The platform test framework runs on JUnit 4.
     testImplementation("junit:junit:4.13.2")
+}
+
+// Whatever transitive path pulls kotlin-stdlib in (serialization, the platform's collected
+// module metadata), the packaged plugin must not bundle it: the IDE supplies the stdlib.
+configurations.runtimeClasspath {
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
 }
 
 kotlin {
@@ -85,6 +103,14 @@ intellijPlatform {
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.PLUGIN_STRUCTURE_WARNINGS,
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
         ))
+        // One run verifies the plugin against both supported platforms: the compile target
+        // (current, 2026.1) and 2026.2 — the runtime compatibility gate for the 262 support,
+        // since unit tests cannot run in a 2026.2 sandbox with Gradle plugin 2.16 (see the
+        // note on the intellijPlatform dependencies above).
+        ides {
+            current()
+            create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.IntellijIdea, "2026.2.1")
+        }
     }
 
     // JetBrains Marketplace upload. Secrets are supplied per-invocation (CI or local shell),
