@@ -17,3 +17,6 @@ local.properties
 
 # Project docs (kept local only)
 docs/
+.zcode/
+.superpowers/
+.kotlin/
