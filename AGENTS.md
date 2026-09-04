@@ -66,10 +66,11 @@ Workflow:
 2. Sync `github-distribution` only when cutting a GitHub-channel release, through a pull
    request with base `github-distribution` and head `main` (`gh pr create --base
    github-distribution --head main`; both branches are protected by rulesets, so no direct
-   pushes). This sync PR is the only PR allowed to target `github-distribution`. Expect
-   conflicts in exactly three places: `JavaRefactorToolset.kt` / its tests / result mappings,
-   and `gradle.properties` (version). Resolve by keeping both sides — the store code AND the
-   restored tool registration.
+   pushes). This sync PR is the only PR allowed to target `github-distribution`, and merging
+   it must NOT use `--delete-branch`: its head is `main`, and gh would delete the local
+   `main` branch. Expect conflicts in exactly three places: `JavaRefactorToolset.kt` / its
+   tests / result mappings, and `gradle.properties` (version). Resolve by keeping both
+   sides — the store code AND the restored tool registration.
 3. Then bump `pluginVersion` to the store version + `.1`, run `./gradlew test`, `buildPlugin`,
    sign, and publish a GitHub Release with the signed zip attached. Tag the GitHub release
    `v<version>` on `github-distribution` and tag the store release `v<version>` on `main`.
