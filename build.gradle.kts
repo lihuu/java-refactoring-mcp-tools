@@ -136,6 +136,24 @@ tasks {
     }
 }
 
+// signPlugin silently SKIPS when the MARKETPLACE_* variables are absent, which used to let an
+// unsigned zip pass for a signed one. Fail the build instead whenever signing was requested.
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name == "signPlugin" }) {
+        listOf(
+            "MARKETPLACE_CERTIFICATE_CHAIN",
+            "MARKETPLACE_PRIVATE_KEY",
+            "MARKETPLACE_PRIVATE_KEY_PASSWORD",
+        ).forEach { name ->
+            check(providers.environmentVariable(name).isPresent) {
+                "signPlugin was requested but $name is not set. Export the three MARKETPLACE_* " +
+                    "variables from ~/.marketplace-certs (chain.crt, private.pem, password.txt) " +
+                    "in this shell before running Gradle; see AGENTS.md 'Dual distribution channels'."
+            }
+        }
+    }
+}
+
 val e2eFixtureSource = layout.projectDirectory.dir("src/test/testData/e2e/java-refactor-fixture")
 val e2eWorkspace = layout.buildDirectory.dir("e2e-workspace")
 val e2eSandbox = layout.buildDirectory.dir("e2e-sandbox")
