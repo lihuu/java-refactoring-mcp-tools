@@ -59,9 +59,10 @@ Two long-lived branches are cut from one codebase and released in lockstep:
 
 Workflow:
 
-1. All development happens on `main` (feature branch → PR → `main`, or direct commits for small
-   solo changes). Open one PR per change, into `main` only — do not mirror PRs into
-   `github-distribution`.
+1. All development happens on `main` through a feature branch and a pull request — direct
+   pushes to `main` are blocked by a repository ruleset ("main: pull requests only"; no bypass,
+   no required approvals, so the author merges their own PR). Open one PR per change, into
+   `main` only — do not mirror PRs into `github-distribution`.
 2. Sync `github-distribution` only when cutting a GitHub-channel release:
    `git checkout github-distribution && git merge main`. Expect conflicts in exactly three
    places: `JavaRefactorToolset.kt` / its tests / result mappings, and `gradle.properties`
