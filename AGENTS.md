@@ -67,10 +67,15 @@ Workflow:
    places: `JavaRefactorToolset.kt` / its tests / result mappings, and `gradle.properties`
    (version). Resolve by keeping both sides — the store code AND the restored tool registration.
 3. Then bump `pluginVersion` to the store version + `.1`, run `./gradlew test`, `buildPlugin`,
-   and publish a GitHub Release with the zip attached. Tag the GitHub release `v<version>` on
-   `github-distribution` and tag the store release `v<version>` on `main`.
-4. Signing is optional: Marketplace accepted the unsigned 1.0.0+ uploads into moderation, and
-   unsigned GitHub zips install with a one-time unsigned-plugin confirmation. If signing is
-   requested, remember signPlugin silently SKIPS without the `MARKETPLACE_*` env vars — a
-   `-signed` artifact is only real if the plugin jar inside differs from the unsigned build
-   (verify the jar hash and the signature block before claiming it is signed).
+   sign, and publish a GitHub Release with the signed zip attached. Tag the GitHub release
+   `v<version>` on `github-distribution` and tag the store release `v<version>` on `main`.
+4. Signing is part of the release flow. The distribution certificate lives in
+   `~/.marketplace-certs` (`chain.crt`, `private.pem`, `password.txt` — a locally generated
+   self-issued pair, valid through 2027-09-02; regenerate before expiry). There is no
+   Marketplace portal certificate feature. Export the env vars from those files in the same
+   shell before `./gradlew signPlugin`; without them the task silently SKIPS. The marketplace
+   signature is embedded at ZIP level (a ~2175-byte block inserted before the central
+   directory) — the plugin jars stay byte-identical between signed and unsigned builds, so
+   NEVER conclude an artifact is unsigned because jar hashes match. Verify a signature by
+   checking that the signed zip is ~2175 bytes larger and that the bytes just before the
+   central directory contain the certificate (openssl dates, CN=lihuu).
