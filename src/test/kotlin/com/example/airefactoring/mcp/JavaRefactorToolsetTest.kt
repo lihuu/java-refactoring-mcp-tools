@@ -64,7 +64,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         assertTrue("java_inline_method missing", "java_inline_method" in names)
         assertTrue("java_introduce_constant missing", "java_introduce_constant" in names)
         assertTrue("java_introduce_field missing", "java_introduce_field" in names)
-        assertFalse("java_introduce_parameter must not be exposed", "java_introduce_parameter" in names)
+        assertTrue("java_introduce_parameter missing", "java_introduce_parameter" in names)
         assertTrue("java_safe_delete missing", "java_safe_delete" in names)
         assertTrue("java_move_instance_method missing", "java_move_instance_method" in names)
         assertTrue("java_make_static missing", "java_make_static" in names)
@@ -84,7 +84,7 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
             "java_replace_inheritance_with_delegation" in names,
         )
         assertTrue("java_locate_symbol missing", "java_locate_symbol" in names)
-        assertEquals(23, names.count { it.startsWith("java_") })
+        assertEquals(24, names.count { it.startsWith("java_") })
         assertEquals(1, McpToolset.EP.extensionList.count { it is JavaRefactorToolset })
     }
 
@@ -206,6 +206,44 @@ class JavaRefactorToolsetTest : BasePlatformTestCase() {
         )
         assertTrue(descriptor.description.contains("native Inline Method"))
         assertTrue(descriptor.description.contains("Never use direct text edits"))
+    }
+
+    fun testIntroduceParameterSchemaContainsExactlySixDeclaredArguments() {
+        val descriptor = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_parameter" }
+
+        assertEquals(
+            setOf(
+                "pathInProject",
+                "startLine",
+                "startColumn",
+                "endLine",
+                "endColumn",
+                "parameterName",
+                "projectPath",
+            ),
+            descriptor.inputSchema.propertiesSchema.keys,
+        )
+    }
+
+    fun testIntroduceParameterDescriptionStatesAgentAndSafetyContract() {
+        val description = ReflectionToolsProvider().getTools()
+            .map { it.descriptor }
+            .single { it.name == "java_introduce_parameter" }
+            .description
+
+        assertTrue(description.contains("derived natively from the selected source"))
+        assertTrue(description.contains("not the general Change Signature"))
+        assertTrue(description.contains("waiting for user approval"))
+        assertTrue(description.contains("affectedFiles"))
+        assertTrue(description.contains("Never use direct text edits"))
+        assertTrue(description.contains("native"))
+        assertTrue(description.contains("start inclusive, end exclusive"))
+        assertFalse(
+            "the introduce-parameter description must not route the agent to the Change Signature tool",
+            description.contains("java_change_signature"),
+        )
     }
 
     fun testIntroduceConstantSchemaContainsOptionalTargetClassArgument() {

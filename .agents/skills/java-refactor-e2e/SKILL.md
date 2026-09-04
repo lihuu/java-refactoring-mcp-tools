@@ -38,7 +38,7 @@ The fixture template is never edited directly. Re-run `prepareE2eFixture` (or re
 |---|---|
 | Extract Method / Introduce Variable / Inline Variable | `RefactoringSamples.calculateTotal` |
 | Introduce Constant / Introduce Field | literals `12` or `"order-"` in `RefactoringSamples` |
-| Change Signature | `RefactoringSamples.formatLabel` or `calculateTax` |
+| Change Signature / Introduce Parameter | `RefactoringSamples.formatLabel` or `calculateTax` |
 | Safe Delete | `RefactoringSamples.unusedHelper` |
 | Move Instance Method | `Invoice.applyDiscount(Customer)` and `Checkout.charge` |
 | Future field encapsulation | `RefactoringSamples.mutableCount` |
