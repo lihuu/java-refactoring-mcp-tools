@@ -53,9 +53,9 @@ Two long-lived branches are cut from one codebase and released in lockstep:
   1.0.5, ...) are cut from `main`.
 - `github-distribution` — the GitHub channel: `main` plus the tools Marketplace review rejects.
   Its release versions must sort strictly above the store version they are cut from — append
-  `.1` to the store version (store 1.0.4 → GitHub 1.0.4.1, store 1.0.5 → GitHub 1.0.5.1). Both
-  channels are signed with the same Marketplace certificate so cross-channel updates never
-  raise signature warnings.
+  `.1` to the store version (store 1.0.4 → GitHub 1.0.4.1, store 1.0.5 → GitHub 1.0.5.1). When
+  signing is used, both channels use the same Marketplace certificate so cross-channel updates
+  never raise signature warnings.
 
 Workflow:
 
@@ -67,8 +67,10 @@ Workflow:
    places: `JavaRefactorToolset.kt` / its tests / result mappings, and `gradle.properties`
    (version). Resolve by keeping both sides — the store code AND the restored tool registration.
 3. Then bump `pluginVersion` to the store version + `.1`, run `./gradlew test`, `buildPlugin`,
-   `signPlugin` (Marketplace cert env vars), verify the jar signature actually exists, and
-   publish a GitHub Release with the signed zip attached. Tag the GitHub release
-   `v<version>` on `github-distribution` and tag the store release `v<version>` on `main`.
-4. A signed artifact is only valid if the plugin jar inside differs from the unsigned build
-   (signPlugin silently skips without the `MARKETPLACE_*` env vars — verify before upload).
+   and publish a GitHub Release with the zip attached. Tag the GitHub release `v<version>` on
+   `github-distribution` and tag the store release `v<version>` on `main`.
+4. Signing is optional: Marketplace accepted the unsigned 1.0.0+ uploads into moderation, and
+   unsigned GitHub zips install with a one-time unsigned-plugin confirmation. If signing is
+   requested, remember signPlugin silently SKIPS without the `MARKETPLACE_*` env vars — a
+   `-signed` artifact is only real if the plugin jar inside differs from the unsigned build
+   (verify the jar hash and the signature block before claiming it is signed).
