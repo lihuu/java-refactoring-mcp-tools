@@ -1,16 +1,36 @@
 # Java Refactoring MCP Tools
 
-An IntelliJ IDEA plugin that exposes native IntelliJ refactorings to AI coding agents through the
-IDE's built-in MCP Server, so agents plan and get approval before any source change — the plugin
-never edits text directly and never calls an LLM itself.
+Native IntelliJ Java refactoring tools for AI coding agents, via MCP. This IntelliJ IDEA plugin
+extends the IDE's built-in MCP Server with PSI-aware Java refactorings — Extract Method, Change
+Signature (add parameter), Move Class, Safe Delete, and more — so an MCP client such as Claude Code
+or Codex can invoke IntelliJ IDEA's native refactoring engine instead of rewriting Java with text
+patches.
 
-The plugin exposes **24 `java_*` tools** (plus a read-only symbol locator): local extractions
-(extract method, introduce variable/constant/field/parameter), API evolution (change signature,
+Agents plan first and get approval before any source change: the plugin never edits text directly and
+never calls an LLM itself.
+
+The plugin exposes `java_*` tools (plus a read-only symbol locator): local extractions
+(extract method, introduce variable/constant/field), API evolution (change signature,
 inline variable/method, safe delete), member ownership (move instance method, make static,
 convert to instance method, encapsulate fields), type structure (extract interface/superclass,
 pull/push members, use interface where possible), complex structural operations (introduce
 parameter object, replace method with method object, extract delegate, replace inheritance with
 delegation, move class), and `java_locate_symbol` for exact targeting coordinates.
+
+## Why IDE refactoring instead of text editing?
+
+Coding agents usually change Java by producing patches, replacements, or whole-file rewrites. That is
+enough for a local edit, but a structural Java refactoring depends on semantic facts a diff cannot
+see: which declaration an identifier resolves to, which call sites and overrides a signature change
+reaches, which members and subclasses an inheritance change touches, and how overloads and project
+structure constrain the result.
+
+This plugin routes those operations to IntelliJ IDEA's native refactoring processors. The IDE resolves
+the selection against the current PSI, computes the change, updates the affected files and references,
+and records it as one IDE command that a single Undo reverses. There is no separate MCP server to
+install: the plugin registers one toolset with IntelliJ IDEA's built-in MCP Server, which keeps
+transport, authentication, project routing, and client connectivity. If a native processor refuses the
+selection, the tool reports the failure instead of falling back to a text edit.
 
 ## Requirements
 
@@ -24,7 +44,7 @@ delegation, move class), and `java_locate_symbol` for exact targeting coordinate
 ```text
 Codex (or another MCP client)
         |
-        | java_extract_method, java_replace_inheritance_with_delegation, ... (24 tools)
+        | java_extract_method, java_replace_inheritance_with_delegation, ...
         v
 IntelliJ MCP Server
         |
