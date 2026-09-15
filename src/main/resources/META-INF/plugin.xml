@@ -9,7 +9,7 @@
         text directly. Every write tool drives one native IntelliJ refactoring processor headlessly
         (no dialog), reports affected files, and stays reversible with exactly one Undo.
 
-        Exposes 24 Java tools: extract method, introduce variable / constant / field / parameter,
+        Exposes Java tools: extract method, introduce variable / constant / field,
         change signature (add parameter), inline variable / method, safe delete, move class, move
         instance method, make static, convert to instance method, encapsulate fields, extract
         interface / superclass, pull members up / push members down, use interface where possible,
